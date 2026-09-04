@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChartNoAxesColumn,
   ClipboardList,
+  Compass,
   GraduationCap,
   LayoutDashboard,
   LogOut,
@@ -34,12 +35,13 @@ const NAV = [
   { href: "/schedule", label: "课表", icon: CalendarDays },
   { href: "/grades", label: "成绩", icon: ChartNoAxesColumn },
   { href: "/exams", label: "考试", icon: ClipboardList },
+  { href: "/insights", label: "学业洞察", icon: Compass },
 ];
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-col gap-1">
+    <nav className="flex flex-col gap-1.5">
       {NAV.map(({ href, label, icon: Icon }) => {
         const active =
           pathname === href || pathname.startsWith(`${href}/`);
@@ -49,10 +51,10 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
             href={href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
               active
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                ? "bg-primary text-primary-foreground shadow-[0_8px_20px_hsl(var(--primary)/.22)]"
+                : "text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground",
             )}
           >
             <Icon className="h-[18px] w-[18px]" />
@@ -66,6 +68,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { state, profile } = useRequireAuth();
   const [loggingOut, setLoggingOut] = React.useState(false);
 
@@ -106,24 +109,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       {/* 桌面侧边栏 */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-card/40 md:flex">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/70 bg-card/70 backdrop-blur-2xl md:flex">
+        <div className="flex items-center gap-3 px-5 py-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_20px_hsl(var(--primary)/.24)]">
             <GraduationCap className="h-[18px] w-[18px]" />
           </div>
-          <span className="text-sm font-semibold tracking-tight">教务助手</span>
+          <div>
+            <span className="block text-sm font-semibold tracking-tight">教务助手</span>
+            <span className="block text-[10px] tracking-[0.18em] text-muted-foreground">ACADEMIC OS</span>
+          </div>
         </div>
         <div className="flex-1 px-3">
           <NavItems />
         </div>
-        <div className="border-t p-3 text-[11px] text-muted-foreground">
-          只读访问 · 数据源已隔离
+        <div className="mx-3 mb-3 rounded-xl border bg-background/60 p-3 text-[11px] text-muted-foreground">
+          <div className="mb-1 flex items-center gap-2 font-medium text-foreground">
+            <span className="h-1.5 w-1.5 animate-[breathe_2s_ease-in-out_infinite] rounded-full bg-emerald-500" />
+            数据连接正常
+          </div>
+          只读访问 · 隐私隔离
         </div>
       </aside>
 
       {/* 主区域 */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-3">
             {/* 移动端导航 */}
             <DropdownMenu>
@@ -189,8 +199,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-8">
-          {children}
+        <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 py-6 md:px-8 md:py-9">
+          <div key={pathname} className="page-enter">{children}</div>
         </main>
       </div>
     </div>
