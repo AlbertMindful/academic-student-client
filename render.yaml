@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: academic-student-client
+    runtime: node
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/auth/session
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 20.19.5
+      - key: NODE_ENV
+        value: production
+      - key: ACADEMIC_DATA_SOURCE
+        value: real
+      - key: ACADEMIC_COOKIE_SECURE
+        value: "true"
+      - key: ACADEMIC_SESSION_TTL_MS
+        value: "28800000"
