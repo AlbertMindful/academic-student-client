@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import {
+  ArrowUpRight,
+  BrainCircuit,
   CalendarDays,
   ClipboardList,
   Clock,
@@ -17,6 +20,7 @@ import { ErrorState } from "@/components/error-state";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -42,9 +46,14 @@ export default function DashboardPage() {
       <PageHeader
         title={`你好，${profile.name}`}
         description={formatToday(new Date())}
+        action={
+          <Button asChild variant="outline" className="rounded-xl bg-card/70">
+            <Link href="/insights">查看学业洞察 <ArrowUpRight /></Link>
+          </Button>
+        }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="stagger-enter grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           label={gpaLabel(gpa.source)}
           value={gpa.value != null ? gpa.value.toFixed(2) : "—"}
@@ -73,16 +82,17 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-5 grid gap-5 lg:grid-cols-3">
         {/* 下一节课 */}
-        <Card className="lg:col-span-2">
+        <Card className="relative overflow-hidden lg:col-span-2">
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
           <CardHeader>
             <CardTitle className="text-base">下一节课</CardTitle>
             <CardDescription>根据当前教学周与单双周自动计算</CardDescription>
           </CardHeader>
           <CardContent>
             {nextClass ? (
-              <div className="flex items-start justify-between gap-4">
+              <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
                     <h3 className="truncate text-xl font-semibold tracking-tight">
@@ -109,7 +119,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-sm text-muted-foreground">距离开始</div>
-                  <div className="mt-0.5 text-lg font-semibold text-primary">
+                  <div className="mt-0.5 text-lg font-semibold text-primary tabular-nums">
                     {nextClass.countdownText}
                   </div>
                 </div>
@@ -159,8 +169,16 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      <Link href="/insights" className="group mt-5 flex items-center justify-between overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/[0.09] via-violet-500/[0.06] to-transparent p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg">
+        <div className="flex items-center gap-4">
+          <span className="rounded-2xl bg-primary p-3 text-primary-foreground shadow-[0_10px_25px_hsl(var(--primary)/.25)]"><BrainCircuit className="h-5 w-5" /></span>
+          <div><div className="font-semibold tracking-tight">让数据替你做一次学业体检</div><div className="mt-1 text-sm text-muted-foreground">发现空闲时间、课程风险与目标 GPA 所需表现</div></div>
+        </div>
+        <ArrowUpRight className="h-5 w-5 text-primary transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+      </Link>
+
       {/* 今日课程 */}
-      <Card className="mt-6">
+      <Card className="mt-5">
         <CardHeader>
           <CardTitle className="text-base">今日课程</CardTitle>
           <CardDescription>

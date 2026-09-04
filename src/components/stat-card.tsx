@@ -17,15 +17,19 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card p-5 shadow-sm transition-shadow hover:shadow-md",
+        "group surface rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
         className,
       )}
     >
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">{label}</span>
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+        {Icon && (
+          <span className="rounded-xl bg-primary/8 p-2 text-primary transition-transform duration-300 group-hover:scale-105">
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-3 text-2xl font-semibold tracking-[-0.03em]">{value}</div>
       {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
     </div>
   );

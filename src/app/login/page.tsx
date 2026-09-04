@@ -17,20 +17,20 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
 
-      <div className="w-full max-w-sm animate-fade-in">
+      <div className="w-full max-w-sm page-enter">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_30px_hsl(var(--primary)/.28)]">
             <GraduationCap className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">教务助手</h1>
+            <h1 className="text-xl font-semibold tracking-[-0.035em]">教务助手</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               现代化教务系统学生客户端
             </p>
           </div>
         </div>
 
-        <div className="rounded-2xl border bg-card p-6 shadow-sm">
+        <div className="surface rounded-[1.35rem] p-6">
           <LoginForm dataSource={serverConfig.dataSource} />
         </div>
 
