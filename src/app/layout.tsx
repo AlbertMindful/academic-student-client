@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -20,6 +21,15 @@ export const metadata: Metadata = {
     template: "%s · 教务助手",
   },
   description: "现代化大学教务系统学生客户端（只读）",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "教务助手",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/icons/app-icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -48,6 +58,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <PwaRegister />
         </ThemeProvider>
       </body>
     </html>
