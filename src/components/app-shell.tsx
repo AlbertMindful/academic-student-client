@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { useRequireAuth } from "@/hooks/use-session";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DataChangeCenter } from "@/components/data-change-center";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -157,6 +158,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {profile?.studentId && (
+              <DataChangeCenter studentId={profile.studentId} />
+            )}
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
