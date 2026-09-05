@@ -19,6 +19,7 @@ import {
   buildSemesters,
   extractCurrentSemesterId,
   extractOfficialGpa,
+  extractExamQueryForm,
   extractExamSources,
   parseExamsHtml,
   parsePortalExamsHtml,
@@ -365,6 +366,34 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
           ...exam,
           category: exam.category || source.category,
         })));
+
+        // 查询页本身通常没有结果，浏览器需要再点击一次“查询”。读取该页的
+        // 原始表单并按相同方式提交，避免依赖易变的厂商字段名。
+        const queryForm = extractExamQueryForm(res.body, id);
+        if (queryForm) {
+          const actionUrl = new URL(queryForm.action || res.url, res.url);
+          if (actionUrl.origin !== new URL(serverConfig.jwBaseUrl).origin) continue;
+          let queryRes;
+          if (queryForm.method === "POST") {
+            queryRes = await this.client.post(actionUrl.toString(), queryForm.fields, {
+              headers: { Referer: res.url },
+            });
+          } else {
+            for (const [key, value] of Object.entries(queryForm.fields)) {
+              actionUrl.searchParams.set(key, value);
+            }
+            queryRes = await this.client.get(actionUrl.toString(), {
+              headers: { Referer: res.url },
+            });
+          }
+          if (!looksLikeLoginPage(queryRes.body) && !/非法访问|错误提示|404/.test(queryRes.body)) {
+            const queried = parseExamsHtml(queryRes.body, id, semesterIdToName(id));
+            found.push(...queried.map((exam) => ({
+              ...exam,
+              category: exam.category || source.category,
+            })));
+          }
+        }
       } catch {
         continue;
       }
