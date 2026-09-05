@@ -51,9 +51,10 @@ export function findFreeWindows(schedule: CourseSchedule[]): FreeWindow[] {
       start = end + 1;
     }
   }
-  return windows.sort((a, b) =>
-    b.endSection - b.startSection - (a.endSection - a.startSection),
-  );
+  return windows.sort((a, b) => {
+    const dayDiff = DAY_NAMES.indexOf(a.day) - DAY_NAMES.indexOf(b.day);
+    return dayDiff || a.startSection - b.startSection || a.endSection - b.endSection;
+  });
 }
 
 export function upcomingExams(exams: Exam[], now = new Date()): Exam[] {

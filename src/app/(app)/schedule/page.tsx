@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { computeTeachingWeek, teachingWeekLabel } from "@/lib/teaching-week";
-import { isoDayOfWeek } from "@/lib/schedule";
+import { isoDayOfWeek, sortSessionsChronologically } from "@/lib/schedule";
 import type { CourseSchedule } from "@/lib/types";
 
 const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -153,9 +153,9 @@ function CourseDetailDialog({
                 {course.credit != null && <span>学分：{course.credit}</span>}
               </div>
               <div className="space-y-2">
-                {course.sessions.map((s, i) => (
+                {sortSessionsChronologically(course.sessions).map((s) => (
                   <div
-                    key={i}
+                    key={`${s.dayOfWeek}-${s.startSection}-${s.endSection}-${s.location}`}
                     className="flex items-center justify-between rounded-lg border p-3"
                   >
                     <div className="text-sm font-medium">
