@@ -358,20 +358,29 @@ export function parseExamsHtml(
   let colMap: Record<string, number> = {};
   for (const tr of rows) {
     const ths = $(tr).find("th, td").toArray().map((el) => clean($(el).text()));
-    if (ths.some((t) => /课程|考试/.test(t))) {
-      colMap = {};
-      ths.forEach((h, i) => {
-        if (/课程名称|课程|科目/.test(h) && !/代码/.test(h)) colMap.course = i;
-        if (/考试时间/.test(h)) colMap.dateTime = i;
-        else if (/日期/.test(h)) colMap.date = i;
-        else if (/时间|时段/.test(h)) colMap.time = i;
-        if (/^(?:考场|考试地点|地点|教室)$/.test(h)) colMap.location = i;
-        if (/座位/.test(h)) colMap.seat = i;
-        if (/考试性质|考试类型|考试类别|考试形式|考核方式/.test(h)) colMap.category = i;
-        if (/状态/.test(h)) colMap.status = i;
-      });
+    const candidate: Record<string, number> = {};
+    ths.forEach((h, i) => {
+      if (/^(?:课程名称|科目名称|课程|科目)$/.test(h)) candidate.course = i;
+      if (/考试时间/.test(h)) candidate.dateTime = i;
+      else if (/日期/.test(h)) candidate.date = i;
+      else if (/时间|时段/.test(h)) candidate.time = i;
+      if (/^(?:考场|考试地点|地点|教室)$/.test(h)) candidate.location = i;
+      if (/座位/.test(h)) candidate.seat = i;
+      if (/考试性质|考试类型|考试类别|考试形式|考核方式/.test(h)) candidate.category = i;
+      if (/状态/.test(h)) candidate.status = i;
+    });
+    // 页面外围也有“考试安排查询”等导航单元格。只有同时出现课程与
+    // 日期/考试时间的行才是真正的结果表头，避免把菜单解析成历史考试。
+    if (
+      candidate.course != null &&
+      (candidate.dateTime != null || candidate.date != null)
+    ) {
+      colMap = candidate;
       break;
     }
+  }
+  if (colMap.course == null || (colMap.dateTime == null && colMap.date == null)) {
+    return [];
   }
 
   const exams: Exam[] = [];
@@ -387,6 +396,7 @@ export function parseExamsHtml(
     const dateRaw = colMap.date != null ? tds[colMap.date] : combinedRaw;
     const timeRaw = colMap.time != null ? tds[colMap.time] : combinedRaw;
     const dateMatch = dateRaw.match(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+    if (!dateMatch) continue;
     const date = dateMatch
       ? `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, "0")}-${String(
           dateMatch[3],
@@ -437,11 +447,17 @@ export function extractExamQueryForm(
   const form = forms.find((candidate) => {
     const node = $(candidate);
     const controls = node
-      .find("input[type='submit'], button")
+      .find("input[type='submit'], input[type='button'], button")
       .toArray()
       .map((el) => clean(`${$(el).text()} ${$(el).attr("value") ?? ""}`))
       .join(" ");
-    return /查询/.test(`${clean(node.text())} ${controls}`) && node.find("select").length > 0;
+    const hasSemesterSelect = node.find("select").toArray().some((select) => {
+      const el = $(select);
+      return /xnxq|semester/i.test(el.attr("name") ?? "") ||
+        el.find("option").toArray().some((option) => clean($(option).text()).includes(semesterId));
+    });
+    return node.find("select").length > 0 &&
+      (/查询/.test(`${clean(node.text())} ${controls}`) || hasSemesterSelect);
   });
   if (!form) return null;
 
