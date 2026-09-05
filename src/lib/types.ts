@@ -120,9 +120,7 @@ export interface GpaSummary {
   value: number | null;
   /** GPA 来源 */
   source: "official" | "computed" | null;
-  /** 已修学分 */
-  earnedCredits: number;
-  /** 总学分 */
+  /** 当前成绩记录包含的学分合计 */
   totalCredits: number;
 }
 

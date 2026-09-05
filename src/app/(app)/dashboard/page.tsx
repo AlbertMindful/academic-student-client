@@ -8,7 +8,6 @@ import {
   ClipboardList,
   Clock,
   GraduationCap,
-  Layers,
   MapPin,
   User,
 } from "lucide-react";
@@ -60,10 +59,10 @@ export default function DashboardPage() {
           icon={GraduationCap}
         />
         <StatCard
-          label="已修学分"
-          value={gpa.earnedCredits}
-          hint={`总学分 ${gpa.totalCredits}`}
-          icon={Layers}
+          label="近期考试"
+          value={upcomingExams.length}
+          hint="场"
+          icon={ClipboardList}
         />
         <StatCard
           label="当前教学周"

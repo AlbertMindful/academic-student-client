@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, History, MapPin, Armchair } from "lucide-react";
+import { CalendarClock, GraduationCap, History, MapPin, Armchair } from "lucide-react";
 import type { Exam } from "@/lib/types";
 import { api } from "@/lib/api-client";
 import { useApi } from "@/hooks/use-api";
@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { examCountdown, fullDateCN } from "@/lib/format";
+import { isOfficialMakeupExam, isOfficialSpecialExam } from "@/lib/exams";
 
 function todayIso(): string {
   const d = new Date();
@@ -35,6 +36,8 @@ export default function ExamsPage() {
   const upcoming = exams
     .filter((e) => e.date >= today)
     .sort((a, b) => (a.date < b.date ? -1 : 1));
+  const makeup = upcoming.filter(isOfficialMakeupExam);
+  const otherUpcoming = upcoming.filter((exam) => !isOfficialMakeupExam(exam));
   const history = exams
     .filter((e) => e.date < today)
     .sort((a, b) => (a.date > b.date ? -1 : 1));
@@ -49,13 +52,25 @@ export default function ExamsPage() {
       <div className="space-y-8">
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-            <CalendarClock className="h-4 w-4" />
-            即将考试
+            <GraduationCap className="h-4 w-4" />
+            补考安排
           </h2>
-          {upcoming.length === 0 ? (
+          {makeup.length === 0 ? (
+            <EmptyState title="暂无学校发布的补考安排" />
+          ) : (
+            <ExamList exams={makeup} />
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <CalendarClock className="h-4 w-4" />
+            其他考试
+          </h2>
+          {otherUpcoming.length === 0 ? (
             <EmptyState title="暂无即将到来的考试" />
           ) : (
-            <ExamList exams={upcoming} />
+            <ExamList exams={otherUpcoming} />
           )}
         </section>
 
@@ -87,7 +102,7 @@ function ExamList({ exams }: { exams: Exam[] }) {
                 <div className="min-w-0">
                   <CardTitle className="text-base">{exam.courseName}</CardTitle>
                   {exam.category && (
-                    <Badge variant={/重修|缓考/.test(exam.category) ? "warning" : "secondary"} className="mt-2">
+                    <Badge variant={isOfficialSpecialExam(exam) ? "warning" : "secondary"} className="mt-2">
                       {exam.category}
                     </Badge>
                   )}

@@ -5,7 +5,6 @@ import { readSessionId, toErrorResponse } from "@/server/api-helpers";
 import { computeTeachingWeek } from "@/lib/teaching-week";
 import { findNextClass, todayClasses } from "@/lib/schedule";
 import { computeGpa } from "@/lib/gpa";
-import { isMakeupExam } from "@/lib/exams";
 
 function todayIso(): string {
   const d = new Date();
@@ -59,7 +58,7 @@ export async function GET(req: NextRequest) {
 
     const todayStr = todayIso();
     const upcomingExams = exams
-      .filter((e) => e.date >= todayStr && !isMakeupExam(e))
+      .filter((e) => e.date >= todayStr)
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
       .slice(0, 5);
 

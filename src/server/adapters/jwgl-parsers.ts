@@ -366,7 +366,7 @@ export function parseExamsHtml(
         if (/时间|时段/.test(h) && !/日期/.test(h)) colMap.time = i;
         if (/地点|考场|教室/.test(h)) colMap.location = i;
         if (/座位/.test(h)) colMap.seat = i;
-        if (/考试性质|考试类型|考试类别/.test(h)) colMap.category = i;
+        if (/考试性质|考试类型|考试类别|考试形式|考核方式/.test(h)) colMap.category = i;
         if (/状态/.test(h)) colMap.status = i;
       });
       break;
