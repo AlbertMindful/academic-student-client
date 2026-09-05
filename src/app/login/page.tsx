@@ -1,7 +1,6 @@
 import { GraduationCap } from "lucide-react";
 import { LoginForm } from "@/components/login-form";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { serverConfig } from "@/server/config";
 
 export const dynamic = "force-dynamic";
 
@@ -25,18 +24,14 @@ export default function LoginPage() {
           <div>
             <h1 className="text-xl font-semibold tracking-[-0.035em]">教务助手</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              现代化教务系统学生客户端
+              课程、成绩与考试，一处查看
             </p>
           </div>
         </div>
 
         <div className="surface rounded-[1.35rem] p-6">
-          <LoginForm dataSource={serverConfig.dataSource} />
+          <LoginForm />
         </div>
-
-        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-          只读访问 · 不保存密码 · 不共享学校会话
-        </p>
       </div>
     </div>
   );

@@ -41,8 +41,6 @@ export function examCountdown(iso: string, now = new Date()): {
   return { text: `${diffDays} 天后`, tone: "upcoming" };
 }
 
-export function gpaLabel(source: "official" | "computed" | null): string {
-  if (source === "official") return "学校官方 GPA";
-  if (source === "computed") return "客户端计算 GPA";
-  return "GPA";
+export function gpaLabel(): string {
+  return "累计 GPA";
 }

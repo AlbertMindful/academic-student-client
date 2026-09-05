@@ -44,7 +44,7 @@ export default function GradesPage() {
     <div>
       <PageHeader
         title="成绩"
-        description="成绩与绩点（只读）"
+        description="查看各学期成绩与绩点"
         action={
           <select
             value={semesterId}
@@ -73,7 +73,7 @@ export default function GradesPage() {
               {gpa.value != null ? gpa.value.toFixed(2) : "—"}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {gpa.source === "computed" ? "客户端计算 GPA" : "GPA"}
+              累计 GPA
             </div>
           </div>
           <div>

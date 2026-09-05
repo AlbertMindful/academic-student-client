@@ -17,10 +17,10 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "教务助手 · 学生客户端",
+    default: "教务助手",
     template: "%s · 教务助手",
   },
-  description: "现代化大学教务系统学生客户端（只读）",
+  description: "课程、成绩、考试与学业规划，一处查看。",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

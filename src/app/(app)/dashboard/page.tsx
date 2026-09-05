@@ -55,9 +55,8 @@ export default function DashboardPage() {
 
       <div className="stagger-enter grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          label={gpaLabel(gpa.source)}
+          label={gpaLabel()}
           value={gpa.value != null ? gpa.value.toFixed(2) : "—"}
-          hint={gpa.source === "computed" ? "根据学校绩点汇总" : undefined}
           icon={GraduationCap}
         />
         <StatCard
