@@ -331,22 +331,29 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
     }
     if (!id) return [];
 
+    const semester = encodeURIComponent(id);
     const candidates = [
-      `${serverConfig.jwgl.examQuery}?xnxq01id=${encodeURIComponent(id)}`,
-      `${serverConfig.jwgl.exams}?xnxq01id=${encodeURIComponent(id)}`,
+      `${serverConfig.jwgl.examQuery}?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}`,
+      `${serverConfig.jwgl.exams}?xnxq01id=${semester}`,
+      `/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}`,
+      `/xsks/xsksap_list?xnxq01id=${semester}`,
     ];
-    for (let i = 0; i < candidates.length; i++) {
+    const found: Exam[] = [];
+    for (const path of candidates) {
       try {
-        const res = await this.client.get(candidates[i]);
+        const res = await this.client.get(`${serverConfig.jwBaseUrl}${path}`);
         if (looksLikeLoginPage(res.body) || /非法访问|错误提示|404/.test(res.body)) {
           continue;
         }
-        return parseExamsHtml(res.body, id, semesterIdToName(id));
+        found.push(...parseExamsHtml(res.body, id, semesterIdToName(id)));
       } catch {
         continue;
       }
     }
-    return [];
+    return [...new Map(found.map((exam) => [
+      `${exam.courseName}|${exam.date}|${exam.startTime ?? ""}|${exam.location}|${exam.category ?? ""}`,
+      exam,
+    ])).values()];
   }
 
   async getOfficialGpa(): Promise<number | null> {

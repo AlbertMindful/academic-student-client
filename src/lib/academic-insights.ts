@@ -1,4 +1,4 @@
-import type { CourseSchedule, Exam, Grade } from "@/lib/types";
+import type { CourseSchedule, Exam } from "@/lib/types";
 import { PERIODS } from "@/lib/periods";
 
 export const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -54,12 +54,6 @@ export function findFreeWindows(schedule: CourseSchedule[]): FreeWindow[] {
   return windows.sort((a, b) =>
     b.endSection - b.startSection - (a.endSection - a.startSection),
   );
-}
-
-export function lowScoreCourses(grades: Grade[]): Grade[] {
-  return grades
-    .filter((grade) => typeof grade.score === "number" && grade.score < 80)
-    .sort((a, b) => Number(a.score) - Number(b.score));
 }
 
 export function upcomingExams(exams: Exam[], now = new Date()): Exam[] {

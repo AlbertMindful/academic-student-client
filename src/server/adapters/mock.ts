@@ -312,6 +312,19 @@ function buildState(): MockState {
       "格物楼 412",
       "23",
     ),
+    {
+      ...exam(
+        semesters[0],
+        "数据库原理",
+        fmt(new Date(nowWeek + 6 * DAY_MS)),
+        "14:00",
+        "16:00",
+        "明德楼 208",
+        "09",
+      ),
+      category: "补考",
+      status: "已安排",
+    },
     // 历史考试
     exam(
       prev1,

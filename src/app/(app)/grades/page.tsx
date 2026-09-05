@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { computeGpa, isPassed } from "@/lib/gpa";
+import { computeGpa } from "@/lib/gpa";
 import { formatScore } from "@/lib/format";
 
 export default function GradesPage() {
@@ -80,12 +80,8 @@ export default function GradesPage() {
             </div>
           </div>
           <div>
-            <div className="text-xl font-semibold">{gpa.earnedCredits}</div>
-            <div className="mt-1 text-xs text-muted-foreground">已修学分</div>
-          </div>
-          <div>
             <div className="text-xl font-semibold">{gpa.totalCredits}</div>
-            <div className="mt-1 text-xs text-muted-foreground">总学分</div>
+            <div className="mt-1 text-xs text-muted-foreground">成绩记录学分</div>
           </div>
           <div>
             <div className="text-xl font-semibold">{list.length}</div>
@@ -112,7 +108,6 @@ export default function GradesPage() {
             </TableHeader>
             <TableBody>
               {list.map((g) => {
-                const passed = isPassed(g.score);
                 return (
                   <TableRow key={g.id}>
                     <TableCell className="font-medium">{g.courseName}</TableCell>
@@ -120,13 +115,7 @@ export default function GradesPage() {
                       {g.semesterName}
                     </TableCell>
                     <TableCell className="text-right">
-                      <span
-                        className={
-                          passed
-                            ? "font-medium"
-                            : "font-medium text-destructive"
-                        }
-                      >
+                      <span className="font-medium">
                         {formatScore(g.score)}
                       </span>
                     </TableCell>
@@ -137,7 +126,7 @@ export default function GradesPage() {
                     {hasRetakeResults && (
                       <TableCell>
                         {g.retakeScore != null ? (
-                          <Badge variant={isPassed(g.retakeScore) ? "success" : "warning"}>重修 {formatScore(g.retakeScore)}</Badge>
+                          <Badge variant="secondary">重修 {formatScore(g.retakeScore)}</Badge>
                         ) : /重修/.test(g.resultType ?? "") ? (
                           <Badge variant="secondary">{g.resultType}</Badge>
                         ) : (

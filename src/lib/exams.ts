@@ -1,8 +1,10 @@
 import type { Exam } from "@/lib/types";
 
-/** 补考数据更新不稳定，产品暂不展示或参与提醒。 */
-export function isMakeupExam(exam: Exam): boolean {
-  return /补考/.test(
-    `${exam.courseName}${exam.category ?? ""}${exam.status ?? ""}`,
-  );
+/** 只根据学校返回的考试性质或状态识别补考，不结合成绩推测。 */
+export function isOfficialMakeupExam(exam: Exam): boolean {
+  return /补考/.test(`${exam.category ?? ""}${exam.status ?? ""}`);
+}
+
+export function isOfficialSpecialExam(exam: Exam): boolean {
+  return /补考|重修|缓考/.test(`${exam.category ?? ""}${exam.status ?? ""}`);
 }

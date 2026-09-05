@@ -12,7 +12,6 @@ import {
   Lightbulb,
   Sparkles,
   Target,
-  TrendingUp,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useApi } from "@/hooks/use-api";
@@ -21,7 +20,6 @@ import {
   DAY_NAMES,
   examCalendarFile,
   findFreeWindows,
-  lowScoreCourses,
   requiredGpa,
   upcomingExams,
   weeklyLoad,
@@ -56,7 +54,6 @@ export default function InsightsPage() {
   const totalSections = load.reduce((sum, value) => sum + value, 0);
   const busiestIndex = load.indexOf(Math.max(...load));
   const freeWindows = findFreeWindows(data.schedule);
-  const risks = lowScoreCourses(data.grades);
   const nextExams = upcomingExams(data.exams);
   const allExams = data.exams;
   const gpa = computeGpa(data.grades, null);
@@ -92,7 +89,7 @@ export default function InsightsPage() {
 
       <div className="stagger-enter grid gap-4 md:grid-cols-3">
         <InsightStat icon={Clock3} label="本周课堂负荷" value={`${totalSections} 节`} detail={`${DAY_NAMES[busiestIndex]}最忙 · ${maxLoad} 节`} />
-        <InsightStat icon={BookOpenCheck} label="需要关注" value={`${risks.length} 门`} detail={risks[0] ? `${risks[0].courseName} · ${risks[0].score} 分` : "目前表现稳定"} tone={risks.length ? "amber" : "green"} />
+        <InsightStat icon={BookOpenCheck} label="成绩记录" value={`${data.grades.length} 门`} detail="仅展示学校返回的成绩" tone="green" />
         <InsightStat icon={CalendarPlus} label="近期考试" value={`${nextExams.length} 场`} detail={nextExams[0] ? `下一场 · ${nextExams[0].courseName}` : "暂无考试安排"} />
       </div>
 
@@ -176,7 +173,7 @@ export default function InsightsPage() {
             <Button variant="outline" size="sm" onClick={downloadCalendar} disabled={!nextExams.length}><CalendarPlus />导出考试日历</Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            <ActionRow icon={TrendingUp} title={risks[0] ? `优先巩固「${risks[0].courseName}」` : "保持当前学习节奏"} detail={risks[0] ? `目前 ${risks[0].score} 分，是最值得优先投入的课程` : "暂未发现低于 80 分的课程"} />
+            <ActionRow icon={BookOpenCheck} title="成绩记录已同步" detail="成绩只按学校原始结果展示，不判断是否通过" />
             <ActionRow icon={Clock3} title={`${DAY_NAMES[busiestIndex]}减少额外安排`} detail={`当天有 ${maxLoad} 节课，建议把深度学习放到轻课日`} />
             <ActionRow icon={CalendarPlus} title={nextExams[0] ? `为「${nextExams[0].courseName}」建立复习计划` : "暂无临近考试"} detail={nextExams[0] ? `${nextExams[0].date} · ${nextExams[0].location || "地点待定"}` : "可提前整理本学期课程笔记"} />
           </CardContent>
