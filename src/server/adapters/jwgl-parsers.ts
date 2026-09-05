@@ -362,9 +362,10 @@ export function parseExamsHtml(
       colMap = {};
       ths.forEach((h, i) => {
         if (/课程名称|课程|科目/.test(h) && !/代码/.test(h)) colMap.course = i;
-        if (/日期|时间/.test(h) && /日期/.test(h)) colMap.date = i;
-        if (/时间|时段/.test(h) && !/日期/.test(h)) colMap.time = i;
-        if (/地点|考场|教室/.test(h)) colMap.location = i;
+        if (/考试时间/.test(h)) colMap.dateTime = i;
+        else if (/日期/.test(h)) colMap.date = i;
+        else if (/时间|时段/.test(h)) colMap.time = i;
+        if (/^(?:考场|考试地点|地点|教室)$/.test(h)) colMap.location = i;
         if (/座位/.test(h)) colMap.seat = i;
         if (/考试性质|考试类型|考试类别|考试形式|考核方式/.test(h)) colMap.category = i;
         if (/状态/.test(h)) colMap.status = i;
@@ -380,8 +381,11 @@ export function parseExamsHtml(
     const courseName = colMap.course != null ? tds[colMap.course] : tds[0];
     if (!courseName || /课程|名称/.test(courseName)) continue;
 
-    const dateRaw = colMap.date != null ? tds[colMap.date] : "";
-    const timeRaw = colMap.time != null ? tds[colMap.time] : "";
+    // 强智的考试安排页会把“2026-09-06 10:30~12:30”放在同一个
+    // “考试时间”单元格中；日期和时段分列的旧页面也继续兼容。
+    const combinedRaw = colMap.dateTime != null ? tds[colMap.dateTime] : "";
+    const dateRaw = colMap.date != null ? tds[colMap.date] : combinedRaw;
+    const timeRaw = colMap.time != null ? tds[colMap.time] : combinedRaw;
     const dateMatch = dateRaw.match(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
     const date = dateMatch
       ? `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, "0")}-${String(
@@ -391,10 +395,10 @@ export function parseExamsHtml(
 
     let startTime: string | undefined;
     let endTime: string | undefined;
-    const timeMatch = timeRaw.match(/(\d{1,2}:\d{2})[^\d]*[-~至]?[^\d]*(\d{1,2}:\d{2})?/);
-    if (timeMatch) {
-      startTime = timeMatch[1];
-      if (timeMatch[2]) endTime = timeMatch[2];
+    const times = timeRaw.match(/\d{1,2}:\d{2}/g) ?? [];
+    if (times.length > 0) {
+      startTime = times[0];
+      if (times[1]) endTime = times[1];
     }
 
     exams.push({
@@ -412,6 +416,70 @@ export function parseExamsHtml(
     });
   }
   return exams;
+}
+
+export interface ExamQueryForm {
+  action: string;
+  method: "GET" | "POST";
+  fields: Record<string, string>;
+}
+
+/**
+ * 读取“考试安排查询”页面上的真实查询表单。
+ * 不硬编码学校可能调整的字段名，同时保留隐藏字段与被点击的查询按钮。
+ */
+export function extractExamQueryForm(
+  html: string,
+  semesterId: string,
+): ExamQueryForm | null {
+  const $ = cheerio.load(html);
+  const forms = $("form").toArray();
+  const form = forms.find((candidate) => {
+    const node = $(candidate);
+    const controls = node
+      .find("input[type='submit'], button")
+      .toArray()
+      .map((el) => clean(`${$(el).text()} ${$(el).attr("value") ?? ""}`))
+      .join(" ");
+    return /查询/.test(`${clean(node.text())} ${controls}`) && node.find("select").length > 0;
+  });
+  if (!form) return null;
+
+  const node = $(form);
+  const fields: Record<string, string> = {};
+  node.find("input[name]").each((_, input) => {
+    const el = $(input);
+    const name = el.attr("name");
+    if (!name || el.is(":disabled")) return;
+    const type = (el.attr("type") ?? "text").toLowerCase();
+    if ((type === "checkbox" || type === "radio") && !el.is(":checked")) return;
+    if (["button", "reset", "file"].includes(type)) return;
+    if (type === "submit") {
+      const label = clean(`${el.attr("value") ?? ""} ${el.attr("title") ?? ""}`);
+      if (!/查询/.test(label)) return;
+    }
+    fields[name] = el.attr("value") ?? "";
+  });
+
+  node.find("select[name]").each((_, select) => {
+    const el = $(select);
+    const name = el.attr("name");
+    if (!name || el.is(":disabled")) return;
+    const options = el.find("option").toArray();
+    const semesterOption = options.find((option) => {
+      const value = ($(option).attr("value") ?? "").trim();
+      const label = clean($(option).text());
+      return value === semesterId || label.includes(semesterId);
+    });
+    const selected = semesterOption ?? options.find((option) => $(option).is(":selected")) ?? options[0];
+    fields[name] = selected ? ($(selected).attr("value") ?? clean($(selected).text())) : "";
+  });
+
+  return {
+    action: (node.attr("action") ?? "").trim(),
+    method: (node.attr("method") ?? "GET").toUpperCase() === "POST" ? "POST" : "GET",
+    fields,
+  };
 }
 
 /**
