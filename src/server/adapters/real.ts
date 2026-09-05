@@ -349,6 +349,7 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
       { path: `/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}` },
       { path: `/xsks/xsksap_list?xnxq01id=${semester}` },
     ];
+    const trace: Array<Record<string, string | number | boolean>> = [];
     const found: Exam[] = portalHtml
       ? parsePortalExamsHtml(portalHtml, id, semesterIdToName(id))
       : [];
@@ -356,12 +357,20 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
       try {
         const res = await this.client.get(`${serverConfig.jwBaseUrl}${source.path}`);
         if (looksLikeLoginPage(res.body) || /非法访问|错误提示|404/.test(res.body)) {
+          trace.push({ source: source.path.split("?")[0], status: res.status, rejected: true });
           continue;
         }
         const portalExams = parsePortalExamsHtml(res.body, id, semesterIdToName(id));
         const parsed = portalExams.length
           ? portalExams
           : parseExamsHtml(res.body, id, semesterIdToName(id));
+        const queryForm = extractExamQueryForm(res.body, id);
+        trace.push({
+          source: source.path.split("?")[0],
+          status: res.status,
+          parsed: parsed.length,
+          form: Boolean(queryForm),
+        });
         found.push(...parsed.map((exam) => ({
           ...exam,
           category: exam.category || source.category,
@@ -369,7 +378,6 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
 
         // 查询页本身通常没有结果，浏览器需要再点击一次“查询”。读取该页的
         // 原始表单并按相同方式提交，避免依赖易变的厂商字段名。
-        const queryForm = extractExamQueryForm(res.body, id);
         if (queryForm) {
           const actionUrl = new URL(queryForm.action || res.url, res.url);
           if (actionUrl.origin !== new URL(serverConfig.jwBaseUrl).origin) continue;
@@ -388,6 +396,12 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
           }
           if (!looksLikeLoginPage(queryRes.body) && !/非法访问|错误提示|404/.test(queryRes.body)) {
             const queried = parseExamsHtml(queryRes.body, id, semesterIdToName(id));
+            trace.push({
+              query: actionUrl.pathname,
+              method: queryForm.method,
+              status: queryRes.status,
+              parsed: queried.length,
+            });
             found.push(...queried.map((exam) => ({
               ...exam,
               category: exam.category || source.category,
@@ -395,13 +409,19 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
           }
         }
       } catch {
+        trace.push({ source: source.path.split("?")[0], failed: true });
         continue;
       }
     }
-    return [...new Map(found.map((exam) => [
+    const exams = [...new Map(found.map((exam) => [
       `${exam.courseName}|${exam.date}|${exam.startTime ?? ""}|${exam.location}|${exam.category ?? ""}`,
       exam,
     ])).values()];
+    if (exams.length === 0) {
+      // 仅记录请求阶段和数量，绝不记录学生信息、Cookie 或教务页面内容。
+      console.warn("[academic-exams] no rows", JSON.stringify({ semester: id, trace }));
+    }
+    return exams;
   }
 
   async getOfficialGpa(): Promise<number | null> {
