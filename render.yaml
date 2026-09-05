@@ -19,4 +19,6 @@ services:
       - key: ACADEMIC_COOKIE_SECURE
         value: "true"
       - key: ACADEMIC_SESSION_TTL_MS
-        value: "28800000"
+        value: "2592000000"
+      - key: ACADEMIC_SESSION_SECRET
+        generateValue: true

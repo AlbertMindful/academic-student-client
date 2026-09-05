@@ -40,21 +40,27 @@ export function LoginForm() {
   const [sending, setSending] = React.useState(false);
   const [smsLoading, setSmsLoading] = React.useState(false);
   const codeInputRef = React.useRef<HTMLInputElement>(null);
-  const cooldownDeadlineRef = React.useRef(0);
+  const [cooldownDeadline, setCooldownDeadline] = React.useState(0);
+  const [cooldownTotal, setCooldownTotal] = React.useState(0);
 
   React.useEffect(() => {
-    if (cooldown <= 0) return;
+    if (cooldownDeadline <= 0) return;
     const update = () => {
       const remaining = Math.max(
         0,
-        Math.ceil((cooldownDeadlineRef.current - Date.now()) / 1000),
+        Math.ceil((cooldownDeadline - Date.now()) / 1000),
       );
       setCooldown(remaining);
+      if (remaining === 0) setCooldownDeadline(0);
     };
-    const id = window.setInterval(update, 250);
+    const id = window.setInterval(update, 1000);
+    document.addEventListener("visibilitychange", update);
     update();
-    return () => window.clearInterval(id);
-  }, [cooldown]);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [cooldownDeadline]);
 
   function resetSmsFlow() {
     setCaptchaDone(false);
@@ -63,7 +69,8 @@ export function LoginForm() {
     setSmsCode("");
     setCooldown(0);
     setCodeSent(false);
-    cooldownDeadlineRef.current = 0;
+    setCooldownDeadline(0);
+    setCooldownTotal(0);
   }
 
   function onSmsUsernameChange(v: string) {
@@ -101,10 +108,12 @@ export function LoginForm() {
         pendingId ?? undefined,
       );
       setPendingId(res.pendingId);
-      setCooldown(res.cooldown);
+      const seconds = Math.max(1, res.cooldown);
+      setCooldownTotal(seconds);
+      setCooldownDeadline(Date.now() + seconds * 1000);
+      setCooldown(seconds);
       setCodeSent(true);
       setSmsCode("");
-      cooldownDeadlineRef.current = Date.now() + res.cooldown * 1000;
       // A resend must use a fresh human check, while the code that was just
       // sent remains fully usable through pendingId.
       setCaptchaDone(false);
@@ -276,14 +285,14 @@ export function LoginForm() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-28 shrink-0"
+                  className="w-32 shrink-0 tabular-nums"
                   onClick={onSendCode}
                   disabled={sending || cooldown > 0 || !captchaDone}
                 >
                   {sending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : cooldown > 0 ? (
-                    `${cooldown}s`
+                    `${cooldown} 秒后重发`
                   ) : (
                     "获取验证码"
                   )}
@@ -292,9 +301,19 @@ export function LoginForm() {
             </div>
 
             {codeSent && (
-              <p role="status" aria-live="polite" className="text-xs text-emerald-600 dark:text-emerald-400">
-                验证码已发送，请查看绑定手机号。验证码错误时可直接重新输入。
-              </p>
+              <div className="space-y-2">
+                <div className="h-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear"
+                    style={{ width: `${cooldownTotal > 0 ? Math.max(0, (cooldown / cooldownTotal) * 100) : 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {cooldown > 0
+                    ? `验证码已发送，${cooldown} 秒后可重新发送。`
+                    : "冷却结束，完成人机校验后可重新发送。"}
+                </p>
+              </div>
             )}
 
             <Button

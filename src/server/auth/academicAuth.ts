@@ -15,7 +15,7 @@ export interface AcademicSession {
  * 不写日志），后续操作只使用学校返回的会话 Cookie（保存在服务端 Jar 中）。
  */
 
-/** 登录：成功返回我方 session id，失败抛出 AcademicError。 */
+/** 登录：成功返回加密会话，失败抛出 AcademicError。 */
 export async function login(credentials: LoginCredentials): Promise<string> {
   const record = sessionStore.create();
   try {
@@ -25,7 +25,7 @@ export async function login(credentials: LoginCredentials): Promise<string> {
     } catch {
       record.profile = null;
     }
-    return record.id;
+    return sessionStore.tokenFor(record.id);
   } catch (e) {
     sessionStore.delete(record.id);
     throw e;
@@ -59,7 +59,7 @@ export async function initiateSmsLogin(
   }
 }
 
-/** 短信登录第二步：提交验证码完成登录，成功返回我方 session id。 */
+/** 短信登录第二步：提交验证码完成登录，成功返回加密会话。 */
 export async function completeSmsLogin(
   pendingId: string,
   code: string,
@@ -94,7 +94,7 @@ export async function completeSmsLogin(
     session.profile = null;
   }
   pendingStore.delete(pending.id);
-  return session.id;
+  return sessionStore.tokenFor(session.id);
 }
 
 /** 退出：调用学校 logout（若存在），删除 Jar 与会话。 */
@@ -137,4 +137,10 @@ export function refreshSession(
   sessionId: string | undefined,
 ): AcademicSession | null {
   return getSession(sessionId);
+}
+
+/** 重新封装已滑动续期的会话，供浏览器更新持久化 Cookie。 */
+export function refreshSessionToken(sessionToken: string | undefined): string | null {
+  const record = sessionStore.get(sessionToken);
+  return record ? sessionStore.tokenFor(record.id) : null;
 }

@@ -4,9 +4,10 @@ import { serverConfig } from "@/server/config";
 import { CookieJar } from "@/server/auth/cookie-jar";
 import { createAdapter } from "@/server/adapters";
 import type { AcademicSystemAdapter } from "@/server/adapters/types";
+import { openSession, sealSession } from "@/server/auth/session-token";
 
 export interface SessionRecord {
-  /** 我方会话 id（浏览器持有的 httpOnly cookie 值） */
+  /** 我方会话 id（仅作为加密会话中的不可预测标识） */
   id: string;
   /** 该用户的学校 Cookie Jar（与其他用户完全隔离） */
   jar: CookieJar;
@@ -19,9 +20,8 @@ export interface SessionRecord {
 }
 
 /**
- * 内存会话存储（开发版）。
- * 浏览器只持有我方 session id；学校 Cookie Jar 只保存在服务端会话内，
- * 绝不暴露给前端。生产环境可替换为 Redis 等集中式存储。
+ * 活跃会话保留在内存中，同时可从浏览器携带的加密会话恢复。
+ * 浏览器无法读取或篡改其中的学校 Cookie，服务重启后也能继续使用。
  */
 class SessionStore {
   private sessions = new Map<string, SessionRecord>();
@@ -51,7 +51,22 @@ class SessionStore {
   /** 读取会话；空闲滑动续期。过期或不存在返回 undefined。 */
   get(id: string | undefined | null): SessionRecord | undefined {
     if (!id) return undefined;
-    const record = this.sessions.get(id);
+    const persisted = id.startsWith("v1.") ? openSession(id) : null;
+    const recordId = persisted?.id ?? id;
+    let record = this.sessions.get(recordId);
+    if (!record && persisted) {
+      const jar = CookieJar.fromJSON(persisted.cookies);
+      record = {
+        id: persisted.id,
+        jar,
+        adapter: createAdapter(jar),
+        profile: persisted.profile,
+        createdAt: persisted.createdAt,
+        lastUsedAt: Date.now(),
+        expiresAt: persisted.expiresAt,
+      };
+      this.sessions.set(record.id, record);
+    }
     if (!record) return undefined;
     const now = Date.now();
     if (record.expiresAt <= now) {
@@ -61,6 +76,23 @@ class SessionStore {
     record.lastUsedAt = now;
     record.expiresAt = now + serverConfig.sessionTtlMs;
     return record;
+  }
+
+  /** 生成带完整性校验的加密会话，用于安全持久化到 httpOnly Cookie。 */
+  tokenFor(id: string): string {
+    const record = this.sessions.get(id);
+    if (!record) throw new Error("Session not found");
+    const now = Date.now();
+    record.lastUsedAt = now;
+    record.expiresAt = now + serverConfig.sessionTtlMs;
+    return sealSession({
+      version: 1,
+      id: record.id,
+      cookies: record.jar.toJSON(),
+      profile: record.profile,
+      createdAt: record.createdAt,
+      expiresAt: record.expiresAt,
+    });
   }
 
   delete(id: string | undefined | null): void {

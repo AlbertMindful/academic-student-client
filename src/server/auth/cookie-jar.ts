@@ -90,6 +90,28 @@ function pathMatches(cookiePath: string, requestPath: string): boolean {
 export class CookieJar {
   private cookies: StoredCookie[] = [];
 
+  /** 从可信的、已解密会话数据恢复学校 Cookie。 */
+  static fromJSON(value: unknown): CookieJar {
+    const jar = new CookieJar();
+    if (!Array.isArray(value)) return jar;
+    jar.cookies = value.filter((item): item is StoredCookie => {
+      if (!item || typeof item !== "object") return false;
+      const cookie = item as Partial<StoredCookie>;
+      return (
+        typeof cookie.name === "string" &&
+        typeof cookie.value === "string" &&
+        typeof cookie.domain === "string" &&
+        typeof cookie.path === "string" &&
+        (cookie.expires === null || typeof cookie.expires === "number") &&
+        typeof cookie.httpOnly === "boolean" &&
+        typeof cookie.secure === "boolean" &&
+        (cookie.sameSite === null || typeof cookie.sameSite === "string")
+      );
+    });
+    jar.purgeExpired();
+    return jar;
+  }
+
   /** 记录一次响应返回的所有 Set-Cookie。 */
   store(url: string, setCookies: string[]): void {
     const host = new URL(url).hostname.toLowerCase();
@@ -130,6 +152,12 @@ export class CookieJar {
 
   clear(): void {
     this.cookies = [];
+  }
+
+  /** 仅用于写入服务端加密会话，调用方不得将结果直接返回前端。 */
+  toJSON(): StoredCookie[] {
+    this.purgeExpired();
+    return this.cookies.map((cookie) => ({ ...cookie }));
   }
 
   private purgeExpired(): void {
