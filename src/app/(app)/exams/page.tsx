@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, GraduationCap, History, MapPin, Armchair } from "lucide-react";
+import { CalendarClock, History, MapPin, Armchair } from "lucide-react";
 import type { Exam } from "@/lib/types";
 import { api } from "@/lib/api-client";
 import { useApi } from "@/hooks/use-api";
@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { examCountdown, fullDateCN } from "@/lib/format";
-import { isOfficialMakeupExam, isOfficialSpecialExam } from "@/lib/exams";
+import { isOfficialSpecialExam } from "@/lib/exams";
 
 function todayIso(): string {
   const d = new Date();
@@ -36,8 +36,6 @@ export default function ExamsPage() {
   const upcoming = exams
     .filter((e) => e.date >= today)
     .sort((a, b) => (a.date < b.date ? -1 : 1));
-  const makeup = upcoming.filter(isOfficialMakeupExam);
-  const otherUpcoming = upcoming.filter((exam) => !isOfficialMakeupExam(exam));
   const history = exams
     .filter((e) => e.date < today)
     .sort((a, b) => (a.date > b.date ? -1 : 1));
@@ -52,25 +50,13 @@ export default function ExamsPage() {
       <div className="space-y-8">
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-            <GraduationCap className="h-4 w-4" />
-            补考安排
-          </h2>
-          {makeup.length === 0 ? (
-            <EmptyState title="暂无学校发布的补考安排" />
-          ) : (
-            <ExamList exams={makeup} />
-          )}
-        </section>
-
-        <section>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             <CalendarClock className="h-4 w-4" />
-            其他考试
+            待考安排
           </h2>
-          {otherUpcoming.length === 0 ? (
+          {upcoming.length === 0 ? (
             <EmptyState title="暂无即将到来的考试" />
           ) : (
-            <ExamList exams={otherUpcoming} />
+            <ExamList exams={upcoming} />
           )}
         </section>
 

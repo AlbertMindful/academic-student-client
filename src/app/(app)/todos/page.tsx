@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, CalendarClock, CheckCircle2, GraduationCap, MapPin } from "lucide-react";
+import { ArrowUpRight, CalendarClock, CheckCircle2, MapPin } from "lucide-react";
 import type { Exam } from "@/lib/types";
 import { api } from "@/lib/api-client";
 import { useApi } from "@/hooks/use-api";
-import { isOfficialMakeupExam, isOfficialSpecialExam } from "@/lib/exams";
+import { isOfficialSpecialExam } from "@/lib/exams";
 import { examCountdown, fullDateCN } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
@@ -29,52 +29,34 @@ export default function TodosPage() {
   const exams = (data ?? [])
     .filter((exam) => exam.date >= todayIso())
     .sort((a, b) => a.date.localeCompare(b.date));
-  const makeupExams = exams.filter(isOfficialMakeupExam);
-  const otherSpecialExams = exams.filter(
-    (exam) => !isOfficialMakeupExam(exam) && isOfficialSpecialExam(exam),
-  );
-  const regularExams = exams.filter((exam) => !isOfficialSpecialExam(exam));
+  const soonExams = exams.filter((exam) => ["今天", "明天"].includes(examCountdown(exam.date).text));
+  const locatedExams = exams.filter((exam) => Boolean(exam.location));
 
   return (
     <div>
       <PageHeader title="考试待办" description="学校已经发布的考试安排" />
 
       <div className="stagger-enter grid gap-4 sm:grid-cols-3">
-        <SummaryCard icon={GraduationCap} label="补考安排" value={makeupExams.length} tone="warning" />
-        <SummaryCard icon={CheckCircle2} label="重修与缓考" value={otherSpecialExams.length} tone="primary" />
+        <SummaryCard icon={CalendarClock} label="今明两天" value={soonExams.length} tone="warning" />
+        <SummaryCard icon={CheckCircle2} label="地点已公布" value={locatedExams.length} tone="primary" />
         <SummaryCard icon={CalendarClock} label="全部待考" value={exams.length} tone="primary" />
       </div>
 
       {exams.length === 0 ? (
         <Card className="mt-5"><CardContent className="pt-6"><EmptyState title="暂时没有待办" description="有新安排时会显示在这里" /></CardContent></Card>
       ) : (
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div className="mt-5">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">补考安排</CardTitle>
+              <CardTitle className="text-base">待考安排</CardTitle>
               <Button asChild variant="ghost" size="sm"><Link href="/exams">全部考试 <ArrowUpRight /></Link></Button>
             </CardHeader>
             <CardContent className="space-y-3">
-              {makeupExams.length ? makeupExams.map((exam) => <ExamTodo key={exam.id} exam={exam} />) : <EmptyState title="暂无学校发布的补考安排" />}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">近期考试</CardTitle>
-              <Button asChild variant="ghost" size="sm"><Link href="/exams">全部考试 <ArrowUpRight /></Link></Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[...otherSpecialExams, ...regularExams].length ? [...otherSpecialExams, ...regularExams].sort((a, b) => a.date.localeCompare(b.date)).map((exam) => <ExamTodo key={exam.id} exam={exam} />) : <EmptyState title="暂无其他考试安排" />}
+              {exams.map((exam) => <ExamTodo key={exam.id} exam={exam} />)}
             </CardContent>
           </Card>
         </div>
       )}
-
-      <div className="mt-5 flex items-start gap-3 rounded-2xl border bg-card/60 p-4 text-sm text-muted-foreground">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-        <p>这里只展示学校明确发布的考试安排，不根据成绩推测是否通过或是否需要补考。</p>
-      </div>
     </div>
   );
 }
