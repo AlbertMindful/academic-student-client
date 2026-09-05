@@ -38,7 +38,8 @@ function looksLikeLoginPage(html: string): boolean {
     html.includes('name="userAccount"') ||
     html.includes('id="userAccount"') ||
     html.includes("请输入密码") ||
-    html.includes("请输入账号")
+    html.includes("请输入账号") ||
+    (/sso\.cqcet\.edu\.cn/i.test(html) && /(?:window\.)?location(?:\.href)?\s*=/i.test(html))
   );
 }
 
@@ -356,7 +357,10 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
     for (const source of candidates) {
       try {
         const res = await this.client.get(`${serverConfig.jwBaseUrl}${source.path}`);
-        if (looksLikeLoginPage(res.body) || /非法访问|错误提示|404/.test(res.body)) {
+        if (looksLikeLoginPage(res.body)) {
+          throw new AcademicError("SESSION_EXPIRED", ERROR_MESSAGES.SESSION_EXPIRED);
+        }
+        if (/非法访问|错误提示|404/.test(res.body)) {
           trace.push({ source: source.path.split("?")[0], status: res.status, rejected: true });
           continue;
         }
@@ -414,7 +418,10 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
                 headers: { Referer: res.url },
               });
             }
-            if (looksLikeLoginPage(queryRes.body) || /非法访问|错误提示|404/.test(queryRes.body)) {
+            if (looksLikeLoginPage(queryRes.body)) {
+              throw new AcademicError("SESSION_EXPIRED", ERROR_MESSAGES.SESSION_EXPIRED);
+            }
+            if (/非法访问|错误提示|404/.test(queryRes.body)) {
               continue;
             }
             const queried = parseExamsHtml(queryRes.body, id, semesterIdToName(id));
@@ -430,7 +437,10 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
             })));
           }
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof AcademicError && error.code === "SESSION_EXPIRED") {
+          throw error;
+        }
         trace.push({ source: source.path.split("?")[0], failed: true });
         continue;
       }
