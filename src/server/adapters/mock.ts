@@ -259,11 +259,6 @@ function buildState(): MockState {
     grade(prev2, "大学英语（二）", 2, 85, 3.7, "公共基础"),
     grade(prev2, "大学体育（一）", 1, 92, 4.0, "公共基础"),
     grade(prev2, "计算机导论", 2, 80, 3.0, "学科基础"),
-    {
-      ...grade(prev1, "概率论与数理统计", 3, 52, 0, "公共基础"),
-      makeupScore: 76,
-      resultType: "补考",
-    },
     grade(prev1, "数据库原理", 3, 48, 0, "专业必修"),
   ];
 
@@ -317,19 +312,6 @@ function buildState(): MockState {
       "格物楼 412",
       "23",
     ),
-    {
-      ...exam(
-        semesters[0],
-        "数据库原理",
-        fmt(new Date(nowWeek + 6 * DAY_MS)),
-        "14:30",
-        "16:30",
-        "格物楼 208",
-        "18",
-      ),
-      category: "补考",
-      status: "已安排",
-    },
     // 历史考试
     exam(
       prev1,
