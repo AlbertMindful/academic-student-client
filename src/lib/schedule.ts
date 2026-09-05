@@ -3,6 +3,18 @@ import { computeTeachingWeek, toHHmm } from "@/lib/teaching-week";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** 按周一到周日、同一天从早到晚排列课程时段。 */
+export function sortSessionsChronologically(
+  sessions: CourseSession[],
+): CourseSession[] {
+  return [...sessions].sort(
+    (a, b) =>
+      a.dayOfWeek - b.dayOfWeek ||
+      a.startSection - b.startSection ||
+      a.endSection - b.endSection,
+  );
+}
+
 /** 该时段在给定教学周是否上课（处理单双周 + 具体周次）。 */
 export function sessionOnWeek(
   course: CourseSchedule,
