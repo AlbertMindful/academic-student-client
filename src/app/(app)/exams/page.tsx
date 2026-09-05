@@ -87,7 +87,7 @@ function ExamList({ exams }: { exams: Exam[] }) {
                 <div className="min-w-0">
                   <CardTitle className="text-base">{exam.courseName}</CardTitle>
                   {exam.category && (
-                    <Badge variant={/补考|重修/.test(exam.category) ? "warning" : "secondary"} className="mt-2">
+                    <Badge variant={/重修|缓考/.test(exam.category) ? "warning" : "secondary"} className="mt-2">
                       {exam.category}
                     </Badge>
                   )}

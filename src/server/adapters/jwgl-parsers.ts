@@ -297,7 +297,6 @@ export function parseGradesHtml(html: string): Grade[] {
         else if (h === "考核方式") col.examType = i;
         else if (h === "课程性质") col.category = i;
         else if (/成绩标志|成绩性质|修读性质|考试性质/.test(h)) col.resultType = i;
-        else if (/补考成绩/.test(h)) col.makeupScore = i;
         else if (/重修成绩/.test(h)) col.retakeScore = i;
       });
       break;
@@ -339,7 +338,6 @@ export function parseGradesHtml(html: string): Grade[] {
       category: col.category != null ? tds[col.category] : undefined,
       examType: col.examType != null ? tds[col.examType] : undefined,
       resultType: col.resultType != null ? tds[col.resultType] : undefined,
-      makeupScore: parseOptionalScore(col.makeupScore),
       retakeScore: parseOptionalScore(col.retakeScore),
     });
   }

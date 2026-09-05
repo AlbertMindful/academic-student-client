@@ -21,11 +21,11 @@ function todayIso(): string {
 }
 
 function latestResult(grade: Grade): number | string {
-  return grade.retakeScore ?? grade.makeupScore ?? grade.score;
+  return grade.retakeScore ?? grade.score;
 }
 
 function isSpecialExam(exam: Exam): boolean {
-  return /补考|重修|缓考/.test(`${exam.category ?? ""}${exam.status ?? ""}`);
+  return /重修|缓考/.test(`${exam.category ?? ""}${exam.status ?? ""}`);
 }
 
 function unresolvedGrades(grades: Grade[]): Grade[] {
@@ -66,7 +66,7 @@ export default function TodosPage() {
 
       <div className="stagger-enter grid gap-4 sm:grid-cols-3">
         <SummaryCard icon={CircleAlert} label="待关注课程" value={pendingCourses.length} tone="warning" />
-        <SummaryCard icon={GraduationCap} label="补考与重修" value={specialExams.length} tone="primary" />
+        <SummaryCard icon={GraduationCap} label="重修与缓考" value={specialExams.length} tone="primary" />
         <SummaryCard icon={CalendarClock} label="近期考试" value={exams.length} tone="primary" />
       </div>
 
@@ -76,7 +76,7 @@ export default function TodosPage() {
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">补考与重修</CardTitle>
+              <CardTitle className="text-base">课程关注</CardTitle>
               <Button asChild variant="ghost" size="sm"><Link href="/grades">查看成绩 <ArrowUpRight /></Link></Button>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -87,10 +87,10 @@ export default function TodosPage() {
                     <div><div className="font-medium">{grade.courseName}</div><div className="mt-1 text-xs text-muted-foreground">{grade.semesterName}</div></div>
                     <Badge variant="warning">{formatScore(latestResult(grade))}</Badge>
                   </div>
-                  <p className="mt-3 text-sm text-muted-foreground">尚未通过，请留意学校后续补考或重修通知。</p>
+                  <p className="mt-3 text-sm text-muted-foreground">尚未通过，可前往成绩页查看详细记录。</p>
                 </div>
               ))}
-              {specialExams.length === 0 && pendingCourses.length === 0 && <EmptyState title="暂无补考或重修事项" />}
+              {specialExams.length === 0 && pendingCourses.length === 0 && <EmptyState title="暂无需要关注的课程" />}
             </CardContent>
           </Card>
 
@@ -108,7 +108,7 @@ export default function TodosPage() {
 
       <div className="mt-5 flex items-start gap-3 rounded-2xl border bg-card/60 p-4 text-sm text-muted-foreground">
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-        <p>只有学校已经发布的考试才会显示为安排；未通过课程仅作为关注提示。</p>
+        <p>未通过课程仅作为成绩关注，不代表学校已经安排相关考试。</p>
       </div>
     </div>
   );

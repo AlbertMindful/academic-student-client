@@ -23,9 +23,7 @@ function scoreLabel(score: number | string): string {
 function gradeSignature(grade: Grade): string {
   return [
     scoreLabel(grade.score),
-    grade.makeupScore == null ? "" : scoreLabel(grade.makeupScore),
     grade.retakeScore == null ? "" : scoreLabel(grade.retakeScore),
-    grade.resultType ?? "",
   ].join("|");
 }
 
