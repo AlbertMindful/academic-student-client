@@ -386,23 +386,40 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
         if (queryForm) {
           const actionUrl = new URL(queryForm.action || res.url, res.url);
           if (actionUrl.origin !== new URL(serverConfig.jwBaseUrl).origin) continue;
-          let queryRes;
-          if (queryForm.method === "POST") {
-            queryRes = await this.client.post(actionUrl.toString(), queryForm.fields, {
-              headers: { Referer: res.url },
-            });
-          } else {
-            for (const [key, value] of Object.entries(queryForm.fields)) {
-              actionUrl.searchParams.set(key, value);
+          // 该校新版查询页通过脚本补充以下隐藏状态后再提交。直接提交原始
+          // form 会被服务端视为“首次打开”，仍返回空表。
+          const completedFields = {
+            ...queryForm.fields,
+            ...(Object.hasOwn(queryForm.fields, "sxxnxq") ? { sxxnxq: id } : {}),
+            ...(Object.hasOwn(queryForm.fields, "dqxnxq") ? { dqxnxq: id } : {}),
+            ...(Object.hasOwn(queryForm.fields, "ckbz") ? { ckbz: "1" } : {}),
+          };
+          const targets = [
+            actionUrl,
+            new URL(serverConfig.jwgl.exams, serverConfig.jwBaseUrl),
+          ].filter((target, index, all) =>
+            all.findIndex((item) => item.toString() === target.toString()) === index,
+          );
+          for (const target of targets) {
+            let queryRes;
+            if (queryForm.method === "POST") {
+              queryRes = await this.client.post(target.toString(), completedFields, {
+                headers: { Referer: res.url },
+              });
+            } else {
+              for (const [key, value] of Object.entries(completedFields)) {
+                target.searchParams.set(key, value);
+              }
+              queryRes = await this.client.get(target.toString(), {
+                headers: { Referer: res.url },
+              });
             }
-            queryRes = await this.client.get(actionUrl.toString(), {
-              headers: { Referer: res.url },
-            });
-          }
-          if (!looksLikeLoginPage(queryRes.body) && !/非法访问|错误提示|404/.test(queryRes.body)) {
+            if (looksLikeLoginPage(queryRes.body) || /非法访问|错误提示|404/.test(queryRes.body)) {
+              continue;
+            }
             const queried = parseExamsHtml(queryRes.body, id, semesterIdToName(id));
             trace.push({
-              query: actionUrl.pathname,
+              query: target.pathname,
               method: queryForm.method,
               status: queryRes.status,
               parsed: queried.length,
