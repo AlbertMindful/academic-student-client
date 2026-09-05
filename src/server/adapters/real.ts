@@ -19,7 +19,9 @@ import {
   buildSemesters,
   extractCurrentSemesterId,
   extractOfficialGpa,
+  extractExamSources,
   parseExamsHtml,
+  parsePortalExamsHtml,
   parseGradesHtml,
   parseProfileHtml,
   parseScheduleHtml,
@@ -332,20 +334,37 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
     if (!id) return [];
 
     const semester = encodeURIComponent(id);
-    const candidates = [
-      `${serverConfig.jwgl.examQuery}?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}`,
-      `${serverConfig.jwgl.exams}?xnxq01id=${semester}`,
-      `/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}`,
-      `/xsks/xsksap_list?xnxq01id=${semester}`,
+    let portalHtml = "";
+    try {
+      portalHtml = (await this.fetchPage(serverConfig.jwgl.studentMainView)).body;
+    } catch {
+      // 门户页不可用时继续使用考试列表页。
+    }
+
+    const candidates: Array<{ path: string; category?: string }> = [
+      ...extractExamSources(portalHtml),
+      { path: `${serverConfig.jwgl.examQuery}?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}` },
+      { path: `${serverConfig.jwgl.exams}?xnxq01id=${semester}` },
+      { path: `/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM&xnxq01id=${semester}` },
+      { path: `/xsks/xsksap_list?xnxq01id=${semester}` },
     ];
-    const found: Exam[] = [];
-    for (const path of candidates) {
+    const found: Exam[] = portalHtml
+      ? parsePortalExamsHtml(portalHtml, id, semesterIdToName(id))
+      : [];
+    for (const source of candidates) {
       try {
-        const res = await this.client.get(`${serverConfig.jwBaseUrl}${path}`);
+        const res = await this.client.get(`${serverConfig.jwBaseUrl}${source.path}`);
         if (looksLikeLoginPage(res.body) || /非法访问|错误提示|404/.test(res.body)) {
           continue;
         }
-        found.push(...parseExamsHtml(res.body, id, semesterIdToName(id)));
+        const portalExams = parsePortalExamsHtml(res.body, id, semesterIdToName(id));
+        const parsed = portalExams.length
+          ? portalExams
+          : parseExamsHtml(res.body, id, semesterIdToName(id));
+        found.push(...parsed.map((exam) => ({
+          ...exam,
+          category: exam.category || source.category,
+        })));
       } catch {
         continue;
       }
