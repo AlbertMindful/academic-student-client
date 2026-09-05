@@ -90,6 +90,12 @@ export interface Grade {
   category?: string;
   /** 考核方式 */
   examType?: string;
+  /** 成绩记录类型，如正常考试 / 补考 / 重修 */
+  resultType?: string;
+  /** 学校单独返回的补考成绩 */
+  makeupScore?: number | string;
+  /** 学校单独返回的重修成绩 */
+  retakeScore?: number | string;
 }
 
 export interface Exam {
@@ -103,6 +109,10 @@ export interface Exam {
   location: string;
   /** 座位号 */
   seatNumber?: string;
+  /** 考试性质，如期末考试 / 补考 / 重修考试 */
+  category?: string;
+  /** 学校返回的安排状态 */
+  status?: string;
   semesterId: string;
   semesterName: string;
 }

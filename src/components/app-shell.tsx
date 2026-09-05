@@ -11,6 +11,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  ListTodo,
   Menu,
   User,
 } from "lucide-react";
@@ -37,6 +38,7 @@ const NAV = [
   { href: "/schedule", label: "课表", icon: CalendarDays },
   { href: "/grades", label: "成绩", icon: ChartNoAxesColumn },
   { href: "/exams", label: "考试", icon: ClipboardList },
+  { href: "/todos", label: "待办", icon: ListTodo },
   { href: "/insights", label: "学业洞察", icon: Compass },
 ];
 

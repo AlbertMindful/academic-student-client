@@ -296,6 +296,9 @@ export function parseGradesHtml(html: string): Grade[] {
         else if (h === "绩点") col.gradePoint = i;
         else if (h === "考核方式") col.examType = i;
         else if (h === "课程性质") col.category = i;
+        else if (/成绩标志|成绩性质|修读性质|考试性质/.test(h)) col.resultType = i;
+        else if (/补考成绩/.test(h)) col.makeupScore = i;
+        else if (/重修成绩/.test(h)) col.retakeScore = i;
       });
       break;
     }
@@ -316,6 +319,13 @@ export function parseGradesHtml(html: string): Grade[] {
     const creditRaw = col.credit != null ? parseFloat(tds[col.credit]) : NaN;
     const gpRaw = col.gradePoint != null ? parseFloat(tds[col.gradePoint]) : NaN;
     const scoreNum = parseFloat(scoreRaw);
+    const parseOptionalScore = (index: number | undefined) => {
+      if (index == null) return undefined;
+      const raw = tds[index]?.trim();
+      if (!raw || raw === "-" || raw === "—") return undefined;
+      const numeric = parseFloat(raw);
+      return Number.isNaN(numeric) ? raw : numeric;
+    };
 
     grades.push({
       id: `${rowSemesterId}|${courseName}`,
@@ -328,6 +338,9 @@ export function parseGradesHtml(html: string): Grade[] {
       semesterName: semesterIdToName(rowSemesterId),
       category: col.category != null ? tds[col.category] : undefined,
       examType: col.examType != null ? tds[col.examType] : undefined,
+      resultType: col.resultType != null ? tds[col.resultType] : undefined,
+      makeupScore: parseOptionalScore(col.makeupScore),
+      retakeScore: parseOptionalScore(col.retakeScore),
     });
   }
   return grades;
@@ -355,6 +368,8 @@ export function parseExamsHtml(
         if (/时间|时段/.test(h) && !/日期/.test(h)) colMap.time = i;
         if (/地点|考场|教室/.test(h)) colMap.location = i;
         if (/座位/.test(h)) colMap.seat = i;
+        if (/考试性质|考试类型|考试类别/.test(h)) colMap.category = i;
+        if (/状态/.test(h)) colMap.status = i;
       });
       break;
     }
@@ -392,6 +407,8 @@ export function parseExamsHtml(
       endTime,
       location: colMap.location != null ? tds[colMap.location] : "",
       seatNumber: colMap.seat != null ? tds[colMap.seat] : undefined,
+      category: colMap.category != null ? tds[colMap.category] : undefined,
+      status: colMap.status != null ? tds[colMap.status] : undefined,
       semesterId,
       semesterName,
     });
