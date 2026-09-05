@@ -414,6 +414,62 @@ export function parseExamsHtml(
   return exams;
 }
 
+/**
+ * 从学生门户页提取考试安排。
+ * 门户可能同时放置普通考试和补考表格，因此逐个表格解析，并用所在模块标题
+ * 补充学校已经明确给出的考试性质。
+ */
+export function parsePortalExamsHtml(
+  html: string,
+  semesterId: string,
+  semesterName: string,
+): Exam[] {
+  const $ = cheerio.load(html);
+  const exams: Exam[] = [];
+
+  $("table").each((_, table) => {
+    const tableText = clean($(table).text());
+    if (!/(考试|补考)/.test(tableText) || !/(日期|时间)/.test(tableText)) return;
+
+    const modulePanel = $(table).closest(
+      ".panel, .box, .card, .module, [class*='panel'], [class*='module'], [class*='portlet']",
+    );
+    const nearbyTitle = clean([
+      $(table).prevAll("h1, h2, h3, h4, .title, .panel-heading").first().text(),
+      modulePanel.find("h1, h2, h3, h4, .title, .panel-heading").first().text(),
+    ].join(" "));
+    const parsed = parseExamsHtml($.html(table), semesterId, semesterName);
+    exams.push(...parsed.map((exam) => ({
+      ...exam,
+      category: exam.category || (/补考/.test(nearbyTitle) ? "补考" : undefined),
+    })));
+  });
+
+  return exams;
+}
+
+export interface PortalExamSource {
+  path: string;
+  category?: string;
+}
+
+/** 读取门户页中学校提供的考试相关站内入口及其官方类别。 */
+export function extractExamSources(html: string): PortalExamSource[] {
+  const $ = cheerio.load(html);
+  const sources = new Map<string, PortalExamSource>();
+  $("a[href]").each((_, anchor) => {
+    const href = ($(anchor).attr("href") ?? "").trim();
+    const label = clean(`${$(anchor).text()} ${$(anchor).attr("title") ?? ""}`);
+    if (!/(考试安排|考试信息|补考)/.test(label)) return;
+    if (!href.startsWith("/") || !/jsxsd|xsks|ksap|kscx/i.test(href)) return;
+    sources.set(href, {
+      path: href,
+      category: /补考/.test(label) ? "补考" : undefined,
+    });
+  });
+  return [...sources.values()];
+}
+
 /** 从校历页提取当前教学周。 */
 export function extractTeachingWeek(html: string): number | null {
   const patterns = [

@@ -68,6 +68,7 @@ export const serverConfig = {
   /** 强智（Sinosoft）学生端 jwgl 路径 */
   jwgl: {
     studentMain: "/jsxsd/framework/xsMain.jsp",
+    studentMainView: "/jsxsd/framework/xsMainV.jsp",
     profile: "/jsxsd/grxx/xsxx",
     schedule: "/jsxsd/xskb/xskb_list.do",
     grades: "/jsxsd/kscj/cjcx_list",
