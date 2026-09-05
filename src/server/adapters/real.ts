@@ -370,6 +370,11 @@ export class RealAcademicAdapter implements AcademicSystemAdapter {
           status: res.status,
           parsed: parsed.length,
           form: Boolean(queryForm),
+          formFields: queryForm
+            ? Object.entries(queryForm.fields)
+                .map(([name, value]) => `${name}:${value === id ? "semester" : value ? "set" : "empty"}`)
+                .join(",")
+            : "",
         });
         found.push(...parsed.map((exam) => ({
           ...exam,
