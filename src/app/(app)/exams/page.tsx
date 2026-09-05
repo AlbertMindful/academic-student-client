@@ -84,19 +84,19 @@ function ExamList({ exams }: { exams: Exam[] }) {
           <Card key={exam.id} className="shadow-sm">
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-base">{exam.courseName}</CardTitle>
-                <Badge
-                  variant={
-                    cd.tone === "soon"
-                      ? "warning"
-                      : cd.tone === "upcoming"
-                        ? "secondary"
-                        : "outline"
-                  }
-                >
+                <div className="min-w-0">
+                  <CardTitle className="text-base">{exam.courseName}</CardTitle>
+                  {exam.category && (
+                    <Badge variant={/补考|重修/.test(exam.category) ? "warning" : "secondary"} className="mt-2">
+                      {exam.category}
+                    </Badge>
+                  )}
+                </div>
+                <Badge variant={cd.tone === "soon" ? "warning" : cd.tone === "upcoming" ? "secondary" : "outline"}>
                   {cd.text}
                 </Badge>
               </div>
+              {exam.status && <div className="pt-1 text-xs">{exam.status}</div>}
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm text-muted-foreground">
               <div>{fullDateCN(exam.date)}</div>

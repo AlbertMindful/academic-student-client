@@ -20,6 +20,15 @@ function scoreLabel(score: number | string): string {
   return String(score).trim();
 }
 
+function gradeSignature(grade: Grade): string {
+  return [
+    scoreLabel(grade.score),
+    grade.makeupScore == null ? "" : scoreLabel(grade.makeupScore),
+    grade.retakeScore == null ? "" : scoreLabel(grade.retakeScore),
+    grade.resultType ?? "",
+  ].join("|");
+}
+
 function gradeKey(grade: Grade): string {
   return `${grade.semesterId}|${grade.courseCode || grade.courseName}`;
 }
@@ -39,6 +48,8 @@ function examSignature(exam: Exam): string {
     exam.endTime ?? "",
     exam.location,
     exam.seatNumber ?? "",
+    exam.category ?? "",
+    exam.status ?? "",
   ].join("|");
 }
 
@@ -68,7 +79,7 @@ export function createAcademicSnapshot(data: {
   return {
     version: 1,
     grades: Object.fromEntries(
-      data.grades.map((grade) => [gradeKey(grade), scoreLabel(grade.score)]),
+      data.grades.map((grade) => [gradeKey(grade), gradeSignature(grade)]),
     ),
     exams: Object.fromEntries(
       data.exams.map((exam) => [examKey(exam), examSignature(exam)]),
@@ -113,14 +124,14 @@ export function detectAcademicChanges(
         id: `grade:new:${key}:${newScore}`,
         kind: "grade",
         title: "新成绩已发布",
-        detail: `${grade.courseName} · ${newScore} 分`,
+        detail: `${grade.courseName} · ${scoreLabel(grade.score)}`,
       });
     } else if (oldScore !== newScore) {
       changes.push({
         id: `grade:update:${key}:${newScore}`,
         kind: "grade",
         title: "成绩有更新",
-        detail: `${grade.courseName} · ${oldScore} → ${newScore}`,
+        detail: `${grade.courseName} · 成绩记录已更新`,
       });
     }
   });

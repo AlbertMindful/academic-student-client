@@ -39,6 +39,9 @@ export default function GradesPage() {
 
   const list = grades.data ?? [];
   const gpa = computeGpa(list, null);
+  const hasAdditionalResults = list.some(
+    (grade) => grade.makeupScore != null || grade.retakeScore != null || grade.resultType,
+  );
 
   return (
     <div>
@@ -94,7 +97,7 @@ export default function GradesPage() {
       {list.length === 0 ? (
         <EmptyState title="该学期暂无成绩" />
       ) : (
-        <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table>
             <TableHeader>
               <TableRow>
@@ -103,6 +106,7 @@ export default function GradesPage() {
                 <TableHead className="text-right">成绩</TableHead>
                 <TableHead className="text-right">学分</TableHead>
                 <TableHead className="text-right">绩点</TableHead>
+                {hasAdditionalResults && <TableHead>补考 / 重修</TableHead>}
                 <TableHead>性质</TableHead>
               </TableRow>
             </TableHeader>
@@ -130,6 +134,19 @@ export default function GradesPage() {
                     <TableCell className="text-right text-muted-foreground">
                       {g.gradePoint != null ? g.gradePoint.toFixed(1) : "—"}
                     </TableCell>
+                    {hasAdditionalResults && (
+                      <TableCell>
+                        {g.retakeScore != null ? (
+                          <Badge variant={isPassed(g.retakeScore) ? "success" : "warning"}>重修 {formatScore(g.retakeScore)}</Badge>
+                        ) : g.makeupScore != null ? (
+                          <Badge variant={isPassed(g.makeupScore) ? "success" : "warning"}>补考 {formatScore(g.makeupScore)}</Badge>
+                        ) : g.resultType ? (
+                          <Badge variant="secondary">{g.resultType}</Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       {g.category ? (
                         <Badge variant="secondary">{g.category}</Badge>
