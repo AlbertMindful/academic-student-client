@@ -17,6 +17,7 @@ export function sessionCookieOptions() {
     sameSite: "lax" as const,
     secure: serverConfig.cookieSecure,
     path: "/",
+    maxAge: Math.floor(serverConfig.sessionTtlMs / 1000),
   };
 }
 

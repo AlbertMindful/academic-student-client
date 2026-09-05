@@ -17,8 +17,11 @@ export const serverConfig = {
   /** 我方会话 Cookie 名（httpOnly，浏览器拿不到值） */
   sessionCookieName: "academic_session",
 
-  /** 会话空闲过期时间（毫秒）。仅凭会话 id 无法自动重登，过期后要求重新登录。 */
-  sessionTtlMs: Number(process.env.ACADEMIC_SESSION_TTL_MS ?? 8 * 60 * 60 * 1000),
+  /** 会话空闲过期时间（毫秒），默认保持 30 天。 */
+  sessionTtlMs: Number(process.env.ACADEMIC_SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
+
+  /** 用于加密持久化会话；生产环境必须配置独立随机值。 */
+  sessionSecret: process.env.ACADEMIC_SESSION_SECRET ?? "",
 
   /** 生产环境才启用 Secure Cookie */
   isProduction: process.env.NODE_ENV === "production",
