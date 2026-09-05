@@ -118,19 +118,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div>
             <span className="block text-sm font-semibold tracking-tight">教务助手</span>
-            <span className="block text-[10px] tracking-[0.18em] text-muted-foreground">ACADEMIC OS</span>
+            <span className="block text-[11px] text-muted-foreground">我的学习中心</span>
           </div>
         </div>
         <div className="flex-1 px-3">
           <NavItems />
         </div>
-        <div className="mx-3 mb-3 rounded-xl border bg-background/60 p-3 text-[11px] text-muted-foreground">
-          <div className="mb-1 flex items-center gap-2 font-medium text-foreground">
-            <span className="h-1.5 w-1.5 animate-[breathe_2s_ease-in-out_infinite] rounded-full bg-emerald-500" />
-            数据连接正常
-          </div>
-          只读访问 · 隐私隔离
-        </div>
+        <div className="h-3" />
       </aside>
 
       {/* 主区域 */}

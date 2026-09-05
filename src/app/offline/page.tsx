@@ -11,7 +11,7 @@ export default function OfflinePage() {
         </span>
         <h1 className="mt-5 text-xl font-semibold tracking-[-0.035em]">暂时无法连接</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          为保护教务数据，本应用不会离线保存课表、成绩或登录信息。恢复网络后即可继续使用。
+          请检查网络连接。恢复网络后，即可继续查看最新的课程与考试安排。
         </p>
         <Button asChild className="mt-6 w-full">
           <Link href="/dashboard"><RefreshCw />重新连接</Link>

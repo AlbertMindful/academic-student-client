@@ -166,7 +166,7 @@ export default function InsightsPage() {
                 <label className="text-xs text-muted-foreground">计划修读学分<Input className="mt-1.5 bg-background/80" type="number" min="1" max="50" value={plannedCredits} onChange={(event) => setPlannedCredits(Math.max(1, Number(event.target.value)))} /></label>
               </div>
             </div>
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">按当前已修课程的学分加权结果估算；学校最终 GPA 计算规则可能有所不同。</p>
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">结果仅供学业规划参考，以最终成绩单为准。</p>
           </CardContent>
         </Card>
 

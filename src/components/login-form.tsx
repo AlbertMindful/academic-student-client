@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SliderCaptcha } from "@/components/slider-captcha";
 import { api, ApiError } from "@/lib/api-client";
 
-export function LoginForm({ dataSource }: { dataSource: string }) {
+export function LoginForm() {
   const [tab, setTab] = React.useState("password");
   const [error, setError] = React.useState<string | null>(null);
 
@@ -325,12 +325,6 @@ export function LoginForm({ dataSource }: { dataSource: string }) {
           {error}
         </div>
       )}
-
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        {dataSource === "real"
-          ? "将通过学校官方登录流程认证（本机账号授权使用）"
-          : "当前为演示模式（mock），任意账号密码或验证码即可体验"}
-      </p>
     </div>
   );
 }

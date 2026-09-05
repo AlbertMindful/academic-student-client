@@ -43,7 +43,7 @@ export default function ExamsPage() {
     <div>
       <PageHeader
         title="考试"
-        description="考试安排与倒计时（只读）"
+        description="查看考试时间、地点与倒计时"
       />
 
       <div className="space-y-8">
