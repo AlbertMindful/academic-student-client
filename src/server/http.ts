@@ -19,6 +19,29 @@ export interface HttpResult {
 
 const MAX_REDIRECTS = 12;
 
+function normalizeCharset(raw: string): string {
+  const charset = raw.trim().replace(/["']/g, "").toLowerCase();
+  if (["gbk", "gb2312", "x-gbk", "cp936"].includes(charset)) return "gb18030";
+  return charset || "utf-8";
+}
+
+/** 按响应头或页面 meta 声明解码强智旧页面（部分页面仍使用 GBK）。 */
+async function decodeResponseBody(res: Response): Promise<string> {
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const contentType = res.headers.get("content-type") ?? "";
+  const headerCharset = contentType.match(/charset\s*=\s*["']?([^;\s"']+)/i)?.[1];
+  const asciiHead = new TextDecoder("latin1").decode(bytes.subarray(0, 4096));
+  const metaCharset =
+    asciiHead.match(/<meta[^>]+charset\s*=\s*["']?([^\s"'/>;]+)/i)?.[1] ??
+    asciiHead.match(/<meta[^>]+content\s*=\s*["'][^"']*charset\s*=\s*([^\s"';>]+)/i)?.[1];
+  const charset = normalizeCharset(headerCharset ?? metaCharset ?? "utf-8");
+  try {
+    return new TextDecoder(charset).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+}
+
 function sanitizeForError(u: string): string {
   try {
     const url = new URL(u);
@@ -78,7 +101,7 @@ export class SchoolHttpClient {
     this.jar.store(res.url, setCookies);
 
     const location = res.headers.get("location");
-    const body = await res.text();
+    const body = await decodeResponseBody(res);
 
     return {
       status: res.status,
