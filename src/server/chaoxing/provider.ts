@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { AcademicEvent, AcademicEventKind } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
 import { courseMatches } from "@/lib/course-matching";
+import { chinaDateTime } from "@/lib/china-time";
 import type { SchoolHttpClient } from "@/server/http";
 
 const COURSE_API = "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?rss=1&view=json";
@@ -103,7 +104,7 @@ function parseCalendarDate(text: string, now = new Date()): { at?: string; on?: 
   }
   const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   if (!match[4]) return { on: date };
-  const local = new Date(`${date}T${match[4]}:00`);
+  const local = chinaDateTime(date, match[4]);
   return Number.isNaN(local.getTime()) ? { on: date } : { at: local.toISOString() };
 }
 
@@ -128,6 +129,7 @@ interface InboxFields {
   sourceId: string;
   title: string;
   publishedText?: string;
+  publishedAt?: string;
   sender?: string;
   unread?: boolean;
   url?: string;
@@ -143,7 +145,7 @@ function inboxEventFromFields(
   const title = cleanText(fields.title);
   if (!title || /评价任务|评学问卷|满意度调查/.test(title)) return null;
   const published = parseCalendarDate(cleanText(fields.publishedText ?? ""), now);
-  const publishedAt = published.at ?? (published.on ? new Date(`${published.on}T12:00:00`).toISOString() : undefined);
+  const publishedAt = fields.publishedAt ?? published.at ?? (published.on ? chinaDateTime(published.on, "12:00").toISOString() : undefined);
   const ageDays = publishedAt ? (now.getTime() - new Date(publishedAt).getTime()) / 86_400_000 : 0;
   const highSignal = /考试|测验|作业|提交|截止|调课|停课|教室|资料|课件|成绩/.test(title);
   if (ageDays > 45 || (ageDays > 14 && !highSignal)) return null;
@@ -218,14 +220,15 @@ function parseInboxApi(payload: unknown, pageUrl: string, officialCourseNames: s
     if (!sourceId || !title) continue;
     const rawTime = item.insertTime;
     const numericTime = typeof rawTime === "number" || /^\d{10,13}$/.test(stringValue(rawTime)) ? Number(rawTime) : null;
-    const publishedText = numericTime && Number.isFinite(numericTime)
+    const publishedAt = numericTime && Number.isFinite(numericTime)
       ? new Date(numericTime < 1e12 ? numericTime * 1000 : numericTime).toISOString()
-      : stringValue(rawTime);
+      : undefined;
     const detailPath = `/pc/notice/${stringValue(item.uuid ?? item.idCode)}/detail?sendTag=${encodeURIComponent(stringValue(item.sendTag))}`;
     const event = inboxEventFromFields({
       sourceId,
       title,
-      publishedText,
+      publishedText: publishedAt ? undefined : stringValue(rawTime),
+      publishedAt,
       sender: stringValue(item.createrName),
       unread: Number(item.isread) === 0 && Number(item.redDot) === 0,
       url: stringValue(item.sourceUrl) || detailPath,
@@ -247,7 +250,7 @@ function parseWorkPage(html: string, course: ChaoxingCourse, pageUrl: string, fe
     if (!title || title.length > 160 || !/作业|任务|测验|考试/.test(`${title} ${text}`)) return;
     if (/已交|待批阅|已完成|已结束|已截止/.test(text) && !/未完成|未交|进行中/.test(text)) return;
     const parsed = parseCalendarDate(text, now);
-    const parsedTime = parsed.at ? Date.parse(parsed.at) : parsed.on ? Date.parse(`${parsed.on}T23:59:59`) : null;
+    const parsedTime = parsed.at ? Date.parse(parsed.at) : parsed.on ? Date.parse(`${parsed.on}T23:59:59+08:00`) : null;
     if (parsedTime != null && parsedTime < now.getTime() - 3 * 60 * 60_000) return;
     const href = safeChaoxingUrl(link.attr("href") ?? "", pageUrl) ?? pageUrl;
     const sourceId = href === pageUrl ? `${course.clazzId}:${title}` : href;
@@ -284,7 +287,7 @@ function parseExamPage(html: string, course: ChaoxingCourse, pageUrl: string, fe
     if (!title || title.length > 160 || !/考试|测验/.test(`${title} ${text}`)) return;
     if (/已完成|已交卷|已结束|已过期/.test(text) && !/未完成|进行中/.test(text)) return;
     const parsed = parseCalendarDate(text, now);
-    const parsedTime = parsed.at ? Date.parse(parsed.at) : parsed.on ? Date.parse(`${parsed.on}T23:59:59`) : null;
+    const parsedTime = parsed.at ? Date.parse(parsed.at) : parsed.on ? Date.parse(`${parsed.on}T23:59:59+08:00`) : null;
     if (parsedTime != null && parsedTime < now.getTime() - 3 * 60 * 60_000) return;
     const deadline = /截止|结束/.test(text);
     const href = safeChaoxingUrl(link.attr("href") ?? "", pageUrl) ?? pageUrl;
