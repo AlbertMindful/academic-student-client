@@ -25,7 +25,11 @@ export function useAcademicCenter() {
     setSyncing(true);
     setError(null);
     try {
-      const payload = await api.syncAcademicCenter(cacheRef.current?.payload.officialCourseNames ?? []);
+      const cachedPayload = cacheRef.current?.payload;
+      const knownAcademicCourseNames = Array.from(new Set((cachedPayload?.events ?? [])
+        .filter((event) => event.courseName && event.sources.some((source) => source.provider === "academic"))
+        .map((event) => event.courseName!)));
+      const payload = await api.syncAcademicCenter(cachedPayload?.officialCourseNames ?? [], knownAcademicCourseNames);
       if (requestNumber !== syncRef.current) return;
       setCache((current) => {
         const next = reconcileSync(payload, current);

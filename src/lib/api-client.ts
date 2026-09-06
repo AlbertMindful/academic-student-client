@@ -118,10 +118,10 @@ export const api = {
     const q = semesterId ? `?semesterId=${encodeURIComponent(semesterId)}` : "";
     return request(`/api/academic/exams${q}`);
   },
-  syncAcademicCenter(officialCourseNames: string[] = []): Promise<AcademicSyncPayload> {
+  syncAcademicCenter(officialCourseNames: string[] = [], knownAcademicCourseNames: string[] = []): Promise<AcademicSyncPayload> {
     return request("/api/academic/sync", {
       method: "POST",
-      body: JSON.stringify({ officialCourseNames }),
+      body: JSON.stringify({ officialCourseNames, knownAcademicCourseNames }),
     });
   },
   startChaoxingConnection(): Promise<{ pendingId: string }> {
