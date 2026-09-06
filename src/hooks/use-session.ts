@@ -7,7 +7,7 @@ import { api } from "@/lib/api-client";
 
 export type AuthState = "loading" | "authenticated" | "unauthenticated";
 
-export function useRequireAuth() {
+export function useSession() {
   const router = useRouter();
   const [state, setState] = React.useState<AuthState>("loading");
   const [profile, setProfile] = React.useState<StudentProfile | undefined>();
@@ -23,13 +23,11 @@ export function useRequireAuth() {
           setState("authenticated");
         } else {
           setState("unauthenticated");
-          router.replace("/login");
         }
       })
       .catch(() => {
         if (cancelled) return;
         setState("unauthenticated");
-        router.replace("/login");
       });
     return () => {
       cancelled = true;
@@ -37,4 +35,13 @@ export function useRequireAuth() {
   }, [router]);
 
   return { state, profile };
+}
+
+export function useRequireAuth() {
+  const session = useSession();
+  const router = useRouter();
+  React.useEffect(() => {
+    if (session.state === "unauthenticated") router.replace("/login");
+  }, [router, session.state]);
+  return session;
 }

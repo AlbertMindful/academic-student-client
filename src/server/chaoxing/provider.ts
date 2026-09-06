@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { AcademicEvent } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
+import { courseMatches } from "@/lib/course-matching";
 import type { SchoolHttpClient } from "@/server/http";
 
 const COURSE_API = "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?rss=1&view=json";
@@ -98,13 +99,20 @@ function parseWorkPage(html: string, course: ChaoxingCourse, fetchedAt: string):
   return events;
 }
 
-export async function getChaoxingAcademicData(client: SchoolHttpClient, fetchedAt: string): Promise<{ courses: ChaoxingCourse[]; events: AcademicEvent[]; warnings: string[] }> {
+export async function getChaoxingAcademicData(client: SchoolHttpClient, fetchedAt: string, officialCourseNames: string[] = []): Promise<{ courses: ChaoxingCourse[]; events: AcademicEvent[]; warnings: string[] }> {
   const response = await client.get(COURSE_API, { headers: { Referer: "https://i.chaoxing.com/" } });
   let payload: unknown;
   try { payload = JSON.parse(response.body); } catch { throw new ChaoxingReauthError("学习通会话无效"); }
   const root = payload as { result?: number | boolean; status?: boolean; msg?: string };
   if (root.result === 0 || root.status === false || /重新登录/.test(root.msg ?? "")) throw new ChaoxingReauthError("学习通登录已过期");
-  const courses = findCourses(payload);
+  const discoveredCourses = findCourses(payload);
+  // When the academic system is available, never treat Chaoxing's public,
+  // self-study or historical classes as official courses. With no current
+  // school list available we cap the fallback scan; the client still filters
+  // results against its last known official list before displaying anything.
+  const courses = officialCourseNames.length
+    ? discoveredCourses.filter((course) => officialCourseNames.some((official) => courseMatches(course.name, official)))
+    : discoveredCourses.slice(0, 20);
   if (!courses.length) return { courses, events: [], warnings: [] };
 
   const results = await Promise.all(courses.map(async (course) => {

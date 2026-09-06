@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlarmClock, BookOpen, CalendarClock, Check, ChevronRight, CircleAlert, EyeOff, MoreHorizontal, Pin, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
 import type { AcademicEvent, AcademicEventState, ProviderHealth } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
-import { useRequireAuth } from "@/hooks/use-session";
+import { useSession } from "@/hooks/use-session";
 import { useAcademicCenter } from "@/hooks/use-academic-center";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ function SourceHealth({ providers, syncing }: { providers: ProviderHealth[]; syn
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">{provider.label}</span><span className="text-[11px] text-muted-foreground">{provider.status === "ok" ? "正常" : provider.status === "not_connected" ? "未连接" : "需留意"}</span></div>
               <p className="mt-0.5 text-xs text-muted-foreground">{provider.message}</p>
+              {provider.provider === "academic" && provider.status === "reauth_required" && <Link href="/login" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">重新连接</Link>}
             </div>
           </div>
         ))}
@@ -106,8 +107,8 @@ function EventSection({ title, hint, events, states, onOpen, onState, empty }: {
 }
 
 export default function DashboardPage() {
-  const { profile } = useRequireAuth();
-  const { cache, loadingCache, syncing, error, sync, setEventState } = useAcademicCenter(profile?.studentId);
+  const { profile } = useSession();
+  const { cache, loadingCache, syncing, error, sync, setEventState } = useAcademicCenter();
   const [selected, setSelected] = React.useState<AcademicEvent | null>(null);
   const now = React.useMemo(() => new Date(), []);
   const today = localDateKey(now);

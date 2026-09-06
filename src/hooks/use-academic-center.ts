@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api-client";
 import type { AcademicEventState } from "@/lib/types";
 import {
@@ -12,8 +11,7 @@ import {
   type AcademicCache,
 } from "@/lib/academic-store";
 
-export function useAcademicCenter(studentId?: string) {
-  const router = useRouter();
+export function useAcademicCenter() {
   const [cache, setCache] = React.useState<AcademicCache | null>(null);
   const [loadingCache, setLoadingCache] = React.useState(true);
   const [syncing, setSyncing] = React.useState(false);
@@ -21,7 +19,7 @@ export function useAcademicCenter(studentId?: string) {
   const syncRef = React.useRef(0);
 
   const sync = React.useCallback(async () => {
-    if (!studentId || syncing) return;
+    if (syncing) return;
     const requestNumber = ++syncRef.current;
     setSyncing(true);
     setError(null);
@@ -30,7 +28,7 @@ export function useAcademicCenter(studentId?: string) {
       if (requestNumber !== syncRef.current) return;
       setCache((current) => {
         const next = reconcileSync(payload, current);
-        void saveAcademicCache(studentId, next);
+        void saveAcademicCache(next);
         return next;
       });
     } catch (cause) {
@@ -39,16 +37,14 @@ export function useAcademicCenter(studentId?: string) {
         ? cause
         : new ApiError("UNKNOWN_ERROR", "暂时无法更新，正在显示上次结果。", 0);
       setError(apiError);
-      if (apiError.code === "SESSION_EXPIRED" && !cache) router.replace("/login");
     } finally {
       if (requestNumber === syncRef.current) setSyncing(false);
     }
-  }, [cache, router, studentId, syncing]);
+  }, [syncing]);
 
   React.useEffect(() => {
-    if (!studentId) return;
     let cancelled = false;
-    loadAcademicCache(studentId).then((stored) => {
+    loadAcademicCache().then((stored) => {
       if (cancelled) return;
       setCache(stored);
       setLoadingCache(false);
@@ -61,20 +57,19 @@ export function useAcademicCenter(studentId?: string) {
     };
     // sync intentionally runs once for this student; manual refresh uses callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId]);
+  }, []);
 
   const setEventState = React.useCallback((
     eventId: string,
     patch: Partial<Omit<AcademicEventState, "updatedAt">>,
   ) => {
-    if (!studentId) return;
     setCache((current) => {
       if (!current) return current;
       const next = updateEventState(current, eventId, patch);
-      void saveAcademicCache(studentId, next);
+      void saveAcademicCache(next);
       return next;
     });
-  }, [studentId]);
+  }, []);
 
   return { cache, loadingCache, syncing, error, sync, setEventState };
 }

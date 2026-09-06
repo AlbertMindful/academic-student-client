@@ -1,4 +1,5 @@
-import { GraduationCap } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, GraduationCap } from "lucide-react";
 import { LoginForm } from "@/components/login-form";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -15,6 +16,10 @@ export default function LoginPage() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
+
+      <Link href="/dashboard" className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" />返回学业中心
+      </Link>
 
       <div className="w-full max-w-sm page-enter">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
