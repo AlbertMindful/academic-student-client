@@ -7,13 +7,16 @@ import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-export function ChaoxingConnect({ onConnected }: { onConnected?: () => void }) {
+export function ChaoxingConnect({ onConnected, requiresReconnect = false }: { onConnected?: () => void; requiresReconnect?: boolean }) {
   const [connected, setConnected] = React.useState<boolean | null>(null);
   const [open, setOpen] = React.useState(false);
   const [pendingId, setPendingId] = React.useState<string | null>(null);
   const [status, setStatus] = React.useState<"idle" | "loading" | "waiting" | "scanned" | "connected" | "expired" | "error">("idle");
 
   React.useEffect(() => { void api.getChaoxingSession().then((result) => setConnected(result.connected)).catch(() => setConnected(false)); }, []);
+  React.useEffect(() => {
+    if (requiresReconnect) setConnected(false);
+  }, [requiresReconnect]);
 
   React.useEffect(() => {
     if (!open || !pendingId || (status !== "waiting" && status !== "scanned")) return;
