@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Check, EyeOff, Inbox, Pin, RotateCcw } from "lucide-react";
 import type { AcademicEvent } from "@/lib/types";
-import { useRequireAuth } from "@/hooks/use-session";
 import { useAcademicCenter } from "@/hooks/use-academic-center";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +22,7 @@ const labels: Record<AcademicEvent["kind"], string> = {
 const formatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 
 export default function ActivityPage() {
-  const { profile } = useRequireAuth();
-  const { cache, loadingCache, setEventState } = useAcademicCenter(profile?.studentId);
+  const { cache, loadingCache, setEventState } = useAcademicCenter();
   const [filter, setFilter] = React.useState<"active" | "done" | "ignored" | "all">("active");
   if (loadingCache && !cache) return <div className="space-y-3"><Skeleton className="h-8 w-40" />{Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-16" />)}</div>;
 

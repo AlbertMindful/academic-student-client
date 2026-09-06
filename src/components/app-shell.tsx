@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   CalendarDays,
   Bell,
@@ -11,6 +11,7 @@ import {
   Compass,
   GraduationCap,
   LayoutDashboard,
+  LogIn,
   LogOut,
   ListTodo,
   Menu,
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
-import { useRequireAuth } from "@/hooks/use-session";
+import { useSession } from "@/hooks/use-session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { Button } from "@/components/ui/button";
@@ -73,9 +74,8 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const { state, profile } = useRequireAuth();
+  const { state, profile } = useSession();
   const [loggingOut, setLoggingOut] = React.useState(false);
 
   async function handleLogout() {
@@ -84,8 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     try {
       await api.logout();
     } finally {
-      router.replace("/login");
-      router.refresh();
+      window.location.replace("/dashboard");
     }
   }
 
@@ -107,9 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (state === "unauthenticated") return null;
-
-  const name = profile?.name ?? "同学";
+  const name = profile?.name ?? "我的学业";
   const initials = name.slice(0, 1) || "学";
 
   return (
@@ -191,16 +188,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     数据与同步
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    void handleLogout();
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <LogOut className="h-4 w-4" />
-                  退出登录
-                </DropdownMenuItem>
+                {state === "authenticated" ? (
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      void handleLogout();
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    断开教务系统
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem asChild>
+                    <Link href="/login"><LogIn className="h-4 w-4" />连接教务系统</Link>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

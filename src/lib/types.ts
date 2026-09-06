@@ -228,9 +228,11 @@ export interface ProviderHealth {
 }
 
 export interface AcademicSyncPayload {
-  profile: StudentProfile;
+  profile?: StudentProfile;
   currentSemester: Semester | null;
   teachingWeek: TeachingWeek | null;
+  /** Current courses confirmed by the academic system. */
+  officialCourseNames?: string[];
   events: AcademicEvent[];
   providers: ProviderHealth[];
   syncedAt: string;

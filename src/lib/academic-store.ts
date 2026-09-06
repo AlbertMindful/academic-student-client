@@ -6,6 +6,7 @@ import type {
   AcademicSyncPayload,
 } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
+import { courseMatches } from "@/lib/course-matching";
 
 const DB_NAME = "academic-command-center";
 const DB_VERSION = 1;
@@ -48,24 +49,48 @@ async function transact<T>(
   }
 }
 
-function key(studentId: string): string {
-  return `student:${studentId}`;
-}
+const CACHE_KEY = "personal";
 
-export async function loadAcademicCache(studentId: string): Promise<AcademicCache | null> {
+export async function loadAcademicCache(): Promise<AcademicCache | null> {
   try {
-    return (await transact("readonly", (store) => store.get(key(studentId)))) ?? null;
+    const current = await transact("readonly", (store) => store.get(CACHE_KEY));
+    if (current) return current as AcademicCache;
+    // One-time migration from the earlier per-student cache layout.
+    const all = await transact("readonly", (store) => store.getAll()) as AcademicCache[] | undefined;
+    return [...(all ?? [])].sort((a, b) => b.savedAt.localeCompare(a.savedAt))[0] ?? null;
   } catch {
     return null;
   }
 }
 
-export async function saveAcademicCache(studentId: string, cache: AcademicCache): Promise<void> {
+export async function saveAcademicCache(cache: AcademicCache): Promise<void> {
   try {
-    await transact("readwrite", (store) => store.put(cache, key(studentId)));
+    await transact("readwrite", (store) => store.put(cache, CACHE_KEY));
   } catch {
     // A private browsing policy may deny IndexedDB. The live view remains usable.
   }
+}
+
+function keepOfficialCourseItems(incoming: AcademicSyncPayload, previous: AcademicCache | null): AcademicSyncPayload {
+  const officialNames = [
+    ...(incoming.officialCourseNames ?? []),
+    ...(previous?.payload.officialCourseNames ?? []),
+    ...incoming.events,
+    ...(previous?.payload.events ?? []),
+  ]
+    .filter((value): value is string | AcademicEvent => typeof value === "string" || value.kind === "class")
+    .map((value) => typeof value === "string" ? value : value.courseName)
+    .filter((name): name is string => Boolean(name));
+  if (!officialNames.length) {
+    return { ...incoming, events: incoming.events.filter((event) => !event.courseName || !event.sources.some((source) => source.provider === "chaoxing")) };
+  }
+  return {
+    ...incoming,
+    events: incoming.events.filter((event) =>
+      !event.sources.some((source) => source.provider === "chaoxing") ||
+      !event.courseName || officialNames.some((official) => courseMatches(event.courseName!, official)),
+    ),
+  };
 }
 
 function meaningfulSignature(event: AcademicEvent): string {
@@ -122,6 +147,7 @@ export function reconcileSync(
   incoming: AcademicSyncPayload,
   previous: AcademicCache | null,
 ): AcademicCache {
+  incoming = keepOfficialCourseItems(incoming, previous);
   const previousById = new Map(previous?.payload.events.map((event) => [event.id, event]));
   const changedIds = new Set<string>();
   const events = incoming.events.map((event) => {
@@ -187,10 +213,27 @@ export function reconcileSync(
     }
   }
 
+  const academicUnavailable = incoming.providers.some((provider) => provider.provider === "academic" && provider.status !== "ok");
+  const chaoxingUnavailable = incoming.providers.some((provider) => provider.provider === "chaoxing" && provider.status !== "ok");
+  const counts = { ...incoming.diagnostics.counts };
+  if (academicUnavailable && previous) {
+    for (const key of ["courses", "exams", "grades"] as const) {
+      counts[key] = previous.payload.diagnostics.counts[key] ?? counts[key];
+    }
+  }
+  if (chaoxingUnavailable && previous) {
+    counts.chaoxingCourses = previous.payload.diagnostics.counts.chaoxingCourses ?? counts.chaoxingCourses;
+  }
+  counts.events = events.length;
+
   return {
     payload: {
       ...incoming,
+      officialCourseNames: incoming.officialCourseNames?.length
+        ? incoming.officialCourseNames
+        : previous?.payload.officialCourseNames,
       events,
+      diagnostics: { ...incoming.diagnostics, counts },
       providers: incoming.providers.map((provider) => {
         const old = previous?.payload.providers.find((item) => item.provider === provider.provider);
         return provider.status !== "ok" && old?.lastSuccessAt
