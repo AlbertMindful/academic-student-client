@@ -336,6 +336,7 @@ function courseForTask(
   courses: ChaoxingCourse[],
   officialCourseNames: string[],
   baseUrl = HOME_URL,
+  allowDiscoveredCourse = false,
 ): string | undefined {
   const normalized = cleanText(label)
     .replace(/^(?:课程|来自课程)\s*[:：]?\s*/, "")
@@ -350,8 +351,12 @@ function courseForTask(
     const courseId = url.searchParams.get("courseId") ?? url.searchParams.get("courseid") ?? url.searchParams.get("moocId")
       ?? decoded.match(/[?&]courseId=(\d+)/i)?.[1];
     const matched = courses.find((course) => course.courseId === courseId);
-    if (matched) return officialCourseNames.find((name) => courseMatches(matched.name, name));
+    if (matched) {
+      return officialCourseNames.find((name) => courseMatches(matched.name, name))
+        ?? (allowDiscoveredCourse ? matched.name : undefined);
+    }
   } catch { /* malformed task URL */ }
+  if (allowDiscoveredCourse && normalized) return normalized;
   return undefined;
 }
 
@@ -421,7 +426,14 @@ function parseGlobalExamPage(
     const status = [examStatus, answerStatus].filter(Boolean).join(" · ");
     const expired = /已结束|已过期|已关闭/.test(examStatus);
     const finished = /已完成|待批阅|已交卷|已提交/.test(answerStatus);
-    const courseName = courseForTask(courseFromTitle(title) ?? "", rawUrl, courses, officialCourseNames, UNIFIED_EXAM_URL);
+    const courseName = courseForTask(
+      courseFromTitle(title) ?? "",
+      rawUrl,
+      courses,
+      officialCourseNames,
+      UNIFIED_EXAM_URL,
+      true,
+    );
     if (!title || !courseName || expired || finished) return;
     const deadline = parseTaskDeadline(`${timing} ${item.text()}`, now);
     if (deadline.at && new Date(deadline.at).getTime() < now.getTime()) return;
