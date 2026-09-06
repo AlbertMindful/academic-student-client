@@ -20,5 +20,9 @@ services:
         value: "true"
       - key: ACADEMIC_SESSION_TTL_MS
         value: "2592000000"
+      - key: ACADEMIC_CREDENTIAL_TTL_MS
+        value: "15552000000"
+      - key: CHAOXING_SESSION_TTL_MS
+        value: "15552000000"
       - key: ACADEMIC_SESSION_SECRET
         generateValue: true

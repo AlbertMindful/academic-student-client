@@ -7,7 +7,7 @@ import { serverConfig } from "@/server/config";
 const PASSPORT = "https://passport2.chaoxing.com";
 const LOGIN_URL = `${PASSPORT}/login?fid=&newversion=true&refer=https%3A%2F%2Fi.chaoxing.com`;
 const PENDING_TTL = 4 * 60_000;
-const SESSION_TTL = 7 * 24 * 60 * 60_000;
+const SESSION_TTL = Number(process.env.CHAOXING_SESSION_TTL_MS ?? 180 * 24 * 60 * 60_000);
 
 interface PendingConnection {
   id: string;
@@ -76,9 +76,24 @@ export async function pollChaoxingConnection(id: string): Promise<
   return { status: "waiting" };
 }
 
-export function chaoxingClientFromToken(token?: string): SchoolHttpClient | null {
+export interface ChaoxingConnection {
+  client: SchoolHttpClient;
+  refreshedToken: () => string;
+}
+
+export function chaoxingConnectionFromToken(token?: string): ChaoxingConnection | null {
   const payload = openChaoxingSession(token);
-  return payload ? new SchoolHttpClient(CookieJar.fromJSON(payload.cookies)) : null;
+  if (!payload) return null;
+  const jar = CookieJar.fromJSON(payload.cookies);
+  return {
+    client: new SchoolHttpClient(jar),
+    refreshedToken: () => sealChaoxingSession({
+      version: 1,
+      cookies: jar.toJSON(),
+      createdAt: payload.createdAt,
+      expiresAt: Date.now() + SESSION_TTL,
+    }),
+  };
 }
 
 export function chaoxingCookieOptions() {

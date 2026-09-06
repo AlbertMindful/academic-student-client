@@ -233,6 +233,9 @@ export function LoginForm() {
                 </>
               )}
             </Button>
+            <p className="text-center text-xs leading-5 text-muted-foreground">
+              登录后会自动保持连接，只有密码变更或学校要求时才需重新登录。
+            </p>
           </form>
         </TabsContent>
 

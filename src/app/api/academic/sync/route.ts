@@ -1,11 +1,13 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import type { CourseSchedule, Exam, Grade, ProviderHealth, Semester, StudentProfile } from "@/lib/types";
 import { deduplicateAcademicEvents, examsToEvents, gradesToEvents, scheduleToEvents } from "@/lib/academic-events";
 import { computeTeachingWeek } from "@/lib/teaching-week";
-import { getAdapter } from "@/server/auth/academicAuth";
-import { readSessionId } from "@/server/api-helpers";
+import { sessionCookieOptions } from "@/server/api-helpers";
 import { AcademicError } from "@/server/auth/errors";
-import { chaoxingClientFromToken, chaoxingCookieName } from "@/server/chaoxing/connection";
+import { credentialsAreInvalid, withPersistentAcademicLogin } from "@/server/auth/persistent-login";
+import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credential-token";
+import { serverConfig } from "@/server/config";
+import { chaoxingConnectionFromToken, chaoxingCookieName, chaoxingCookieOptions } from "@/server/chaoxing/connection";
 import { ChaoxingReauthError, getChaoxingAcademicData } from "@/server/chaoxing/provider";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +31,8 @@ export async function GET(req: NextRequest) {
   let scheduleResult: SourceResult<CourseSchedule[]> = { data: [] };
   let examResult: SourceResult<Exam[]> = { data: [] };
   let gradeResult: SourceResult<Grade[]> = { data: [] };
+  let renewedAcademicToken: string | undefined;
+  let clearAcademicCredentials = false;
   let academicHealth: ProviderHealth = {
     provider: "academic", label: "教务系统", status: "reauth_required",
     lastAttemptAt: syncedAt, message: "需要登录教务系统",
@@ -36,22 +40,29 @@ export async function GET(req: NextRequest) {
 
   // The academic system is one independent provider, not a gate for the app.
   try {
-    const adapter = getAdapter(readSessionId(req));
-    const [nextProfile, semesters] = await Promise.all([
-      adapter.getStudentProfile(),
-      adapter.getSemesters(),
-    ]);
-    profile = nextProfile;
-    currentSemester = semesters.find((semester) => semester.isCurrent) ?? semesters[0] ?? null;
-    [scheduleResult, examResult, gradeResult] = await Promise.all([
-      currentSemester
-        ? isolate<CourseSchedule[]>([], () => adapter.getSchedule(currentSemester!.id))
-        : Promise.resolve<SourceResult<CourseSchedule[]>>({ data: [] }),
-      currentSemester
-        ? isolate<Exam[]>([], () => adapter.getExams(currentSemester!.id))
-        : Promise.resolve<SourceResult<Exam[]>>({ data: [] }),
-      isolate<Grade[]>([], () => adapter.getGrades()),
-    ]);
+    const academic = await withPersistentAcademicLogin(req, async (adapter) => {
+      const [nextProfile, semesters] = await Promise.all([
+        adapter.getStudentProfile(),
+        adapter.getSemesters(),
+      ]);
+      const semester = semesters.find((item) => item.isCurrent) ?? semesters[0] ?? null;
+      const [schedule, exams, grades] = await Promise.all([
+        semester
+          ? isolate<CourseSchedule[]>([], () => adapter.getSchedule(semester.id))
+          : Promise.resolve<SourceResult<CourseSchedule[]>>({ data: [] }),
+        semester
+          ? isolate<Exam[]>([], () => adapter.getExams(semester.id))
+          : Promise.resolve<SourceResult<Exam[]>>({ data: [] }),
+        isolate<Grade[]>([], () => adapter.getGrades()),
+      ]);
+      return { nextProfile, semester, schedule, exams, grades };
+    });
+    renewedAcademicToken = academic.renewedSessionToken;
+    profile = academic.data.nextProfile;
+    currentSemester = academic.data.semester;
+    scheduleResult = academic.data.schedule;
+    examResult = academic.data.exams;
+    gradeResult = academic.data.grades;
     warnings.push(...[
       scheduleResult.error && `课表：${scheduleResult.error}`,
       examResult.error && `考试：${examResult.error}`,
@@ -66,27 +77,28 @@ export async function GET(req: NextRequest) {
       message: failedCount ? `${failedCount} 项数据暂时未更新` : "已同步",
     };
   } catch (cause) {
-    const reauth = cause instanceof AcademicError && cause.code === "SESSION_EXPIRED";
+    clearAcademicCredentials = credentialsAreInvalid(cause);
+    const reauth = clearAcademicCredentials || (cause instanceof AcademicError && cause.code === "SESSION_EXPIRED");
     academicHealth = {
       provider: "academic", label: "教务系统",
       status: reauth ? "reauth_required" : "degraded",
       lastAttemptAt: syncedAt,
-      message: reauth ? "登录已失效，请重新连接" : "暂时无法更新",
+      message: clearAcademicCredentials ? "密码可能已变更，请重新连接" : reauth ? "登录已失效，请重新连接" : "暂时无法更新",
     };
     warnings.push(`教务系统：${academicHealth.message}`);
   }
 
   const officialCourseNames = Array.from(new Set(scheduleResult.data.map((course) => course.courseName).filter(Boolean)));
-  const chaoxingClient = chaoxingClientFromToken(req.cookies.get(chaoxingCookieName)?.value);
+  const chaoxingConnection = chaoxingConnectionFromToken(req.cookies.get(chaoxingCookieName)?.value);
   let chaoxingEvents = [] as ReturnType<typeof gradesToEvents>;
   let chaoxingCourseCount = 0;
   let chaoxingHealth: ProviderHealth = {
     provider: "chaoxing", label: "学习通", status: "not_connected",
     lastAttemptAt: syncedAt, message: "尚未连接",
   };
-  if (chaoxingClient) {
+  if (chaoxingConnection) {
     try {
-      const data = await getChaoxingAcademicData(chaoxingClient, syncedAt, officialCourseNames);
+      const data = await getChaoxingAcademicData(chaoxingConnection.client, syncedAt, officialCourseNames);
       chaoxingEvents = data.events;
       chaoxingCourseCount = data.courses.length;
       chaoxingHealth = {
@@ -114,7 +126,7 @@ export async function GET(req: NextRequest) {
     ...chaoxingEvents,
   ]);
 
-  return Response.json({
+  const response = NextResponse.json({
     profile,
     currentSemester,
     teachingWeek: currentSemester?.startDate
@@ -133,4 +145,18 @@ export async function GET(req: NextRequest) {
       warnings,
     },
   });
+  if (renewedAcademicToken) {
+    response.cookies.set(serverConfig.sessionCookieName, renewedAcademicToken, sessionCookieOptions());
+  }
+  if (clearAcademicCredentials) {
+    response.cookies.set(credentialCookieName, "", { ...credentialCookieOptions(), maxAge: 0 });
+  }
+  if (chaoxingConnection) {
+    if (chaoxingHealth.status === "reauth_required") {
+      response.cookies.set(chaoxingCookieName, "", { ...chaoxingCookieOptions(), maxAge: 0 });
+    } else {
+      response.cookies.set(chaoxingCookieName, chaoxingConnection.refreshedToken(), chaoxingCookieOptions());
+    }
+  }
+  return response;
 }

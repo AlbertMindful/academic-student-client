@@ -3,6 +3,7 @@ import { serverConfig } from "@/server/config";
 import { completeSmsLogin } from "@/server/auth/academicAuth";
 import { errorResponse, sessionCookieOptions, toErrorResponse } from "@/server/api-helpers";
 import { hit } from "@/server/rate-limit";
+import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credential-token";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
     const sessionId = await completeSmsLogin(pendingId, code);
     const res = NextResponse.json({ ok: true });
     res.cookies.set(serverConfig.sessionCookieName, sessionId, sessionCookieOptions());
+    // A successful SMS login must not retain a password from an older account.
+    res.cookies.set(credentialCookieName, "", { ...credentialCookieOptions(), maxAge: 0 });
     return res;
   } catch (e) {
     return toErrorResponse(e);
