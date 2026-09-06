@@ -24,7 +24,11 @@ async function isolate<T>(fallback: T, operation: () => Promise<T>): Promise<Sou
   }
 }
 
-async function synchronize(req: NextRequest, cachedOfficialCourseNames: string[] = []) {
+async function synchronize(
+  req: NextRequest,
+  cachedOfficialCourseNames: string[] = [],
+  cachedKnownAcademicCourseNames: string[] = [],
+) {
   const syncedAt = new Date().toISOString();
   const warnings: string[] = [];
   let profile: StudentProfile | undefined;
@@ -97,6 +101,7 @@ async function synchronize(req: NextRequest, cachedOfficialCourseNames: string[]
   )).slice(0, 100);
   const knownAcademicCourseNames = Array.from(new Set([
     ...officialCourseNames,
+    ...cachedKnownAcademicCourseNames,
     ...examResult.data.map((exam) => exam.courseName),
     ...gradeResult.data.map((grade) => grade.courseName),
   ].map((name) => name.trim()).filter((name) => name.length >= 2 && name.length <= 100))).slice(0, 200);
@@ -188,9 +193,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({})) as { officialCourseNames?: unknown };
+  const body = await req.json().catch(() => ({})) as { officialCourseNames?: unknown; knownAcademicCourseNames?: unknown };
   const cachedOfficialCourseNames = Array.isArray(body.officialCourseNames)
     ? body.officialCourseNames.filter((name): name is string => typeof name === "string")
     : [];
-  return synchronize(req, cachedOfficialCourseNames);
+  const cachedKnownAcademicCourseNames = Array.isArray(body.knownAcademicCourseNames)
+    ? body.knownAcademicCourseNames.filter((name): name is string => typeof name === "string").slice(0, 200)
+    : [];
+  return synchronize(req, cachedOfficialCourseNames, cachedKnownAcademicCourseNames);
 }
