@@ -6,7 +6,6 @@ import type { SchoolHttpClient } from "@/server/http";
 
 const COURSE_API = "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?rss=1&view=json";
 const HOME_URL = "https://i.chaoxing.com/base";
-const MAX_COURSES_WITHOUT_SCHOOL_LIST = 20;
 
 export class ChaoxingReauthError extends Error {}
 
@@ -398,9 +397,12 @@ export async function getChaoxingAcademicData(
     throw new ChaoxingReauthError("学习通登录已过期");
   }
   const discoveredCourses = findCourses(payload);
+  // Without a current official course list we cannot reliably distinguish this
+  // semester's courses from historical/public courses. Cached trusted events stay
+  // visible in the client; new course-scoped data waits for academic sync.
   const courses = officialCourseNames.length
     ? discoveredCourses.filter((course) => officialCourseNames.some((official) => courseMatches(course.name, official)))
-    : discoveredCourses.slice(0, MAX_COURSES_WITHOUT_SCHOOL_LIST);
+    : [];
 
   const [inbox, courseResults] = await Promise.all([
     fetchInbox(client, officialCourseNames, fetchedAt),

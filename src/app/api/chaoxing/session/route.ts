@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chaoxingConnectionFromToken, chaoxingCookieName, chaoxingCookieOptions } from "@/server/chaoxing/connection";
+import { chaoxingConnectionFromToken } from "@/server/chaoxing/connection";
+import { clearChaoxingSessionToken, readChaoxingSessionToken, writeChaoxingSessionToken } from "@/server/chaoxing/session-cookie";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const connection = chaoxingConnectionFromToken(req.cookies.get(chaoxingCookieName)?.value);
+  const connection = chaoxingConnectionFromToken(readChaoxingSessionToken(req));
   const response = NextResponse.json({ connected: Boolean(connection) });
-  if (connection) response.cookies.set(chaoxingCookieName, connection.refreshedToken(), chaoxingCookieOptions());
+  if (connection) writeChaoxingSessionToken(response, connection.refreshedToken());
   return response;
 }
 
 export async function DELETE() {
   const response = NextResponse.json({ connected: false });
-  response.cookies.set(chaoxingCookieName, "", { ...chaoxingCookieOptions(), maxAge: 0 });
+  clearChaoxingSessionToken(response);
   return response;
 }
