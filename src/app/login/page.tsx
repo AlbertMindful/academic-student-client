@@ -22,9 +22,9 @@ export default function LoginPage() {
             <GraduationCap className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-[-0.035em]">教务助手</h1>
+            <h1 className="text-xl font-semibold tracking-[-0.035em]">个人学业中心</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              课程、成绩与考试，一处查看
+              今天需要知道的事，都在这里
             </p>
           </div>
         </div>

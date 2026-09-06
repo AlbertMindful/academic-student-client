@@ -181,6 +181,9 @@ export interface AcademicEvent {
   startsAt?: string;
   endsAt?: string;
   dueAt?: string;
+  /** Calendar date when the provider did not supply a reliable time. */
+  startsOn?: string;
+  dueOn?: string;
   location?: string;
   status?: string;
   semesterId?: string;

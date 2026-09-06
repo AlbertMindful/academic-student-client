@@ -49,7 +49,7 @@ function source(
 }
 
 function minutesUntil(event: AcademicEvent, now: Date): number | null {
-  const anchor = event.dueAt ?? event.startsAt;
+  const anchor = event.dueAt ?? event.startsAt ?? (event.dueOn ? `${event.dueOn}T23:59:59` : event.startsOn ? `${event.startsOn}T12:00:00` : undefined);
   if (!anchor) return null;
   const timestamp = new Date(anchor).getTime();
   if (!Number.isFinite(timestamp)) return null;
@@ -150,6 +150,7 @@ export function examsToEvents(
       courseName: exam.courseName,
       startsAt: atLocal(exam.date, exam.startTime),
       endsAt: atLocal(exam.date, exam.endTime),
+      startsOn: exam.date,
       location: exam.location || undefined,
       status: exam.status,
       semesterId: exam.semesterId,
@@ -230,8 +231,8 @@ export function canMergeEvents(a: AcademicEvent, b: AcademicEvent): MergeDecisio
   }
   if (a.kind !== b.kind) return { merge: false, confidence: 0, reason: "事件类型不同" };
 
-  const aAnchor = a.dueAt ?? a.startsAt;
-  const bAnchor = b.dueAt ?? b.startsAt;
+  const aAnchor = a.dueAt ?? a.startsAt ?? a.dueOn ?? a.startsOn;
+  const bAnchor = b.dueAt ?? b.startsAt ?? b.dueOn ?? b.startsOn;
   if (aAnchor && bAnchor && datePart(aAnchor) !== datePart(bAnchor)) {
     return { merge: false, confidence: 0, reason: "日期冲突" };
   }

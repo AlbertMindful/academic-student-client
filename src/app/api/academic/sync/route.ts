@@ -15,6 +15,8 @@ import { computeTeachingWeek } from "@/lib/teaching-week";
 import { getAdapter } from "@/server/auth/academicAuth";
 import { readSessionId, toErrorResponse } from "@/server/api-helpers";
 import { AcademicError } from "@/server/auth/errors";
+import { chaoxingClientFromToken, chaoxingCookieName } from "@/server/chaoxing/connection";
+import { ChaoxingReauthError, getChaoxingAcademicData } from "@/server/chaoxing/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -67,10 +69,27 @@ export async function GET(req: NextRequest) {
       message: warnings.length ? `${warnings.length} 项数据暂时未更新` : "已同步",
     };
 
+    const chaoxingClient = chaoxingClientFromToken(req.cookies.get(chaoxingCookieName)?.value);
+    let chaoxingEvents = [] as ReturnType<typeof gradesToEvents>;
+    let chaoxingCourseCount = 0;
+    let chaoxingHealth: ProviderHealth = { provider: "chaoxing", label: "学习通", status: "not_connected", lastAttemptAt: syncedAt, message: "尚未连接" };
+    if (chaoxingClient) {
+      try {
+        const data = await getChaoxingAcademicData(chaoxingClient, syncedAt);
+        chaoxingEvents = data.events;
+        chaoxingCourseCount = data.courses.length;
+        chaoxingHealth = { provider: "chaoxing", label: "学习通", status: data.warnings.length ? "degraded" : "ok", lastAttemptAt: syncedAt, lastSuccessAt: syncedAt, message: data.warnings.length ? `${data.warnings.length} 门课程暂时未更新` : "已同步" };
+        warnings.push(...data.warnings.map((warning) => `学习通：${warning}`));
+      } catch (cause) {
+        chaoxingHealth = { provider: "chaoxing", label: "学习通", status: cause instanceof ChaoxingReauthError ? "reauth_required" : "degraded", lastAttemptAt: syncedAt, message: cause instanceof ChaoxingReauthError ? "登录已过期，请重新连接" : "暂时无法更新" };
+      }
+    }
+
     const events = deduplicateAcademicEvents([
       ...scheduleToEvents(scheduleResult.data, currentSemester, syncedAt),
       ...examsToEvents(examResult.data, syncedAt),
       ...gradesToEvents(gradeResult.data, syncedAt),
+      ...chaoxingEvents,
     ]);
 
     return Response.json({
@@ -86,13 +105,7 @@ export async function GET(req: NextRequest) {
       events,
       providers: [
         academicHealth,
-        {
-          provider: "chaoxing",
-          label: "学习通",
-          status: "not_connected",
-          lastAttemptAt: syncedAt,
-          message: "尚未连接",
-        },
+        chaoxingHealth,
       ],
       syncedAt,
       diagnostics: {
@@ -101,6 +114,7 @@ export async function GET(req: NextRequest) {
           exams: examResult.data.length,
           grades: gradeResult.data.length,
           events: events.length,
+          chaoxingCourses: chaoxingCourseCount,
         },
         warnings,
       },

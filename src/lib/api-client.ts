@@ -121,4 +121,16 @@ export const api = {
   syncAcademicCenter(): Promise<AcademicSyncPayload> {
     return request("/api/academic/sync");
   },
+  startChaoxingConnection(): Promise<{ pendingId: string }> {
+    return request("/api/chaoxing/connect/start", { method: "POST" });
+  },
+  pollChaoxingConnection(pendingId: string): Promise<{ status: "waiting" | "scanned" | "connected" | "expired" }> {
+    return request("/api/chaoxing/connect/poll", { method: "POST", body: JSON.stringify({ pendingId }) });
+  },
+  getChaoxingSession(): Promise<{ connected: boolean }> {
+    return request("/api/chaoxing/session");
+  },
+  disconnectChaoxing(): Promise<{ connected: boolean }> {
+    return request("/api/chaoxing/session", { method: "DELETE" });
+  },
 };

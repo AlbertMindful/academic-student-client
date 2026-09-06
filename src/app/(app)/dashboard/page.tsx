@@ -23,11 +23,14 @@ function localDateKey(value: Date | string): string {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
-function eventAnchor(event: AcademicEvent): string | undefined { return event.dueAt ?? event.startsAt; }
+function eventAnchor(event: AcademicEvent): string | undefined { return event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn; }
 
 function eventMeta(event: AcademicEvent): string {
   const anchor = eventAnchor(event);
-  return [anchor ? dateTimeFormatter.format(new Date(anchor)) : undefined, event.location].filter(Boolean).join(" · ");
+  const dateLabel = event.dueAt || event.startsAt
+    ? dateTimeFormatter.format(new Date(anchor!))
+    : anchor ? new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", weekday: "short" }).format(new Date(`${anchor}T12:00:00`)) : undefined;
+  return [dateLabel, event.location].filter(Boolean).join(" · ");
 }
 
 function iconFor(event: AcademicEvent) {

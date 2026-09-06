@@ -42,6 +42,6 @@ export const ERROR_MESSAGES: Record<AcademicErrorCode, string> = {
   NETWORK_ERROR: "无法连接教务系统，请检查网络后重试。",
   MAINTENANCE: "教务系统维护中，请稍后再试。",
   DATA_PARSE_ERROR: "教务数据解析失败，请稍后重试。",
-  UNKNOWN_AUTH_FAILURE: "登录失败，请稍后重试或联系管理员。",
+  UNKNOWN_AUTH_FAILURE: "登录失败，请稍后重试或在官方页面确认账号状态。",
   UNKNOWN_ERROR: "发生了未知错误，请稍后重试。",
 };
