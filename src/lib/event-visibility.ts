@@ -80,5 +80,12 @@ export function isHistoricalAcademicEvent(
   currentSemesterId: string | undefined,
   now = Date.now(),
 ): boolean {
-  return !state?.done && !state?.ignored && !isCurrentAcademicEvent(event, state, currentSemesterId, now);
+  if (state?.done || state?.ignored || isCurrentAcademicEvent(event, state, currentSemesterId, now)) return false;
+  // Classes beyond the seven-day activity horizon are upcoming, not history;
+  // they remain available in the full schedule without cluttering this feed.
+  if (event.kind === "class") {
+    const end = eventEnd(event);
+    return end != null && end < now - 3 * 60 * 60 * 1000;
+  }
+  return true;
 }
