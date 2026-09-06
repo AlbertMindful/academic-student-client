@@ -380,8 +380,7 @@ function parseGlobalWorkPage(
     const remaining = cleanText(content.find(".fr").first().text());
     const rawUrl = item.attr("data") ?? content.attr("data") ?? content.find("a[href]").first().attr("href") ?? "";
     const courseName = courseForTask(courseLabel, rawUrl, courses, officialCourseNames, UNIFIED_WORK_URL);
-    if (!title || !courseName) return;
-    if (!/未提交|未交|未完成|待提交|进行中/.test(status) || /已提交|已完成|待批阅|已截止|已结束/.test(status)) return;
+    if (!title || !courseName || !status) return;
     const deadline = parseTaskDeadline(`${remaining} ${content.text()}`, now);
     const url = safeChaoxingUrl(rawUrl, UNIFIED_WORK_URL) ?? UNIFIED_WORK_URL;
     const sourceId = rawUrl || `${courseName}:${title}`;
@@ -424,8 +423,7 @@ function parseGlobalExamPage(
     const onclick = action.attr("onclick") ?? "";
     const rawUrl = onclick.match(/go\(['"]([^'"]+)/)?.[1] ?? "";
     const status = [examStatus, answerStatus].filter(Boolean).join(" · ");
-    const expired = /已结束|已过期|已关闭/.test(examStatus);
-    const finished = /已完成|待批阅|已交卷|已提交/.test(answerStatus);
+    const score = cleanText(cells.eq(6).text());
     const courseName = courseForTask(
       courseFromTitle(title) ?? "",
       rawUrl,
@@ -434,9 +432,8 @@ function parseGlobalExamPage(
       UNIFIED_EXAM_URL,
       true,
     );
-    if (!title || !courseName || expired || finished) return;
+    if (!title || !courseName) return;
     const deadline = parseTaskDeadline(`${timing} ${item.text()}`, now);
-    if (deadline.at && new Date(deadline.at).getTime() < now.getTime()) return;
     const url = safeChaoxingUrl(rawUrl, UNIFIED_EXAM_URL) ?? UNIFIED_EXAM_URL;
     const sourceId = rawUrl || `${courseName}:${title}`;
     events.push(makeEvent({
@@ -447,9 +444,9 @@ function parseGlobalExamPage(
       courseName,
       dueAt: deadline.at,
       dueOn: deadline.on,
-      status: status || "待完成",
+      status: [status, score && score !== "---" ? `${score} 分` : ""].filter(Boolean).join(" · ") || "待完成",
       contextLabel: "线上考试",
-      sources: [{ provider: "chaoxing", providerLabel: "学习通", sourceId: `exam:${sourceId}`, url, raw: { channel: "exam", status, timing } }],
+      sources: [{ provider: "chaoxing", providerLabel: "学习通", sourceId: `exam:${sourceId}`, url, raw: { channel: "exam", status, timing, score } }],
       firstSeenAt: fetchedAt,
       updatedAt: fetchedAt,
     }, now));
@@ -472,7 +469,7 @@ async function hydrateWorkDeadlines(
   const now = new Date(fetchedAt);
   const hydrated = await mapWithConcurrency(events, 4, async (event) => {
     const source = event.sources[0];
-    if (!source?.url || event.dueAt || event.dueOn) return event;
+    if (!source?.url || event.dueAt || event.dueOn || /已完成|待批阅|已提交|已截止|已结束/.test(event.status ?? "")) return event;
     try {
       const detail = await client.get(source.url, { headers: { Referer: UNIFIED_WORK_URL } });
       if (isChaoxingLoginPage(detail.url, detail.body)) throw new ChaoxingReauthError();
@@ -483,7 +480,15 @@ async function hydrateWorkDeadlines(
       return event;
     }
   });
-  return hydrated.filter((event) => !event.dueAt || new Date(event.dueAt).getTime() >= now.getTime());
+  return hydrated;
+}
+
+function numericPageCount(html: string, selector: string): number {
+  const $ = cheerio.load(html);
+  return Math.min(10, Math.max(1, ...$(selector).toArray().map((node) => {
+    const onclick = $(node).attr("onclick") ?? "";
+    return Number(cleanText($(node).text()) || onclick.match(/changePage\((\d+)\)/)?.[1] || 1);
+  }).filter(Number.isFinite)));
 }
 
 function discoverUnifiedUrls(homeHtml: string): { work: string; exam: string } {
@@ -510,11 +515,27 @@ async function fetchUnifiedTasks(
   const fetchOne = async (kind: "work" | "exam") => {
     const url = urls[kind];
     try {
-      const page = await client.get(url, { headers: { Referer: HOME_URL } });
+      const page = kind === "work"
+        ? await client.get(url, { headers: { Referer: HOME_URL } })
+        : await client.post(url, { start: "1", nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: HOME_URL } });
       if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
-      const events = kind === "work"
-        ? parseGlobalWorkPage(page.body, courses, officialCourseNames, fetchedAt)
-        : parseGlobalExamPage(page.body, courses, officialCourseNames, fetchedAt);
+      const pageCount = kind === "work"
+        ? numericPageCount(page.body, "li.xl-active, li.xl-active ~ li")
+        : numericPageCount(page.body, "[onclick*='changePage']");
+      const remainingPages = await Promise.all(Array.from({ length: pageCount - 1 }, async (_, index) => {
+        const pageNumber = index + 2;
+        if (kind === "work") {
+          const nextUrl = new URL(url);
+          nextUrl.searchParams.set("pageNum", String(pageNumber));
+          return client.get(nextUrl.toString(), { headers: { Referer: url } });
+        }
+        return client.post(url, { start: String(pageNumber), nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: url } });
+      }));
+      const pages = [page, ...remainingPages];
+      if (pages.some((result) => isChaoxingLoginPage(result.url, result.body))) throw new ChaoxingReauthError();
+      const events = pages.flatMap((result) => kind === "work"
+        ? parseGlobalWorkPage(result.body, courses, officialCourseNames, fetchedAt)
+        : parseGlobalExamPage(result.body, courses, officialCourseNames, fetchedAt));
       return kind === "work" ? hydrateWorkDeadlines(client, events, fetchedAt) : events;
     } catch (cause) {
       if (cause instanceof ChaoxingReauthError) throw cause;
@@ -678,6 +699,7 @@ export async function getChaoxingAcademicData(
   client: SchoolHttpClient,
   fetchedAt: string,
   officialCourseNames: string[] = [],
+  knownAcademicCourseNames: string[] = officialCourseNames,
 ): Promise<ChaoxingAcademicData> {
   const response = await client.get(COURSE_API, { headers: { Referer: HOME_URL } });
   if (isChaoxingLoginPage(response.url, response.body)) {
@@ -704,7 +726,7 @@ export async function getChaoxingAcademicData(
 
   const [inbox, globalTasks, courseResults] = await Promise.all([
     fetchInbox(client, officialCourseNames, fetchedAt),
-    fetchUnifiedTasks(client, discoveredCourses, officialCourseNames, fetchedAt),
+    fetchUnifiedTasks(client, discoveredCourses, knownAcademicCourseNames, fetchedAt),
     mapWithConcurrency(courses, 3, (course) => fetchCourseEvents(client, course, fetchedAt)),
   ]);
   const rawEvents = [

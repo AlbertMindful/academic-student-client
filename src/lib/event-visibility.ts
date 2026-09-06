@@ -42,14 +42,17 @@ export function isCurrentAcademicEvent(
   if (state?.done || state?.ignored) return false;
 
   const end = eventEnd(event);
+  const sourceFinished = /已完成|待批阅|已交卷|已提交|已结束|已截止|已过期|已关闭/.test(event.status ?? "");
   switch (event.kind) {
     case "class":
       return end != null && end >= now - 3 * 60 * 60 * 1000 && end <= now + 7 * DAY_MS;
     case "exam":
+      if (sourceFinished) return false;
       return end != null
         ? end >= now
         : !state?.read && recentlyAdded(event, 30, now);
     case "assignment":
+      if (sourceFinished) return false;
       return end != null
         ? end >= now - DAY_MS
         : !state?.read && recentlyAdded(event, 30, now);

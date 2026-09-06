@@ -95,6 +95,11 @@ async function synchronize(req: NextRequest, cachedOfficialCourseNames: string[]
       .map((name) => name.trim())
       .filter((name) => name.length >= 2 && name.length <= 100),
   )).slice(0, 100);
+  const knownAcademicCourseNames = Array.from(new Set([
+    ...officialCourseNames,
+    ...examResult.data.map((exam) => exam.courseName),
+    ...gradeResult.data.map((grade) => grade.courseName),
+  ].map((name) => name.trim()).filter((name) => name.length >= 2 && name.length <= 100))).slice(0, 200);
   const chaoxingConnection = chaoxingConnectionFromToken(readChaoxingSessionToken(req));
   let chaoxingEvents = [] as ReturnType<typeof gradesToEvents>;
   let chaoxingCourseCount = 0;
@@ -105,7 +110,12 @@ async function synchronize(req: NextRequest, cachedOfficialCourseNames: string[]
   };
   if (chaoxingConnection) {
     try {
-      const data = await getChaoxingAcademicData(chaoxingConnection.client, syncedAt, officialCourseNames);
+      const data = await getChaoxingAcademicData(
+        chaoxingConnection.client,
+        syncedAt,
+        officialCourseNames,
+        knownAcademicCourseNames,
+      );
       chaoxingEvents = data.events;
       chaoxingCourseCount = data.courses.length;
       chaoxingCounts = data.counts;
