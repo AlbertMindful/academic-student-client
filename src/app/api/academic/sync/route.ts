@@ -24,7 +24,7 @@ async function isolate<T>(fallback: T, operation: () => Promise<T>): Promise<Sou
   }
 }
 
-export async function GET(req: NextRequest) {
+async function synchronize(req: NextRequest, cachedOfficialCourseNames: string[] = []) {
   const syncedAt = new Date().toISOString();
   const warnings: string[] = [];
   let profile: StudentProfile | undefined;
@@ -89,7 +89,12 @@ export async function GET(req: NextRequest) {
     warnings.push(`教务系统：${academicHealth.message}`);
   }
 
-  const officialCourseNames = Array.from(new Set(scheduleResult.data.map((course) => course.courseName).filter(Boolean)));
+  const liveOfficialCourseNames = scheduleResult.data.map((course) => course.courseName).filter(Boolean);
+  const officialCourseNames = Array.from(new Set(
+    (liveOfficialCourseNames.length ? liveOfficialCourseNames : cachedOfficialCourseNames)
+      .map((name) => name.trim())
+      .filter((name) => name.length >= 2 && name.length <= 100),
+  )).slice(0, 100);
   const chaoxingConnection = chaoxingConnectionFromToken(readChaoxingSessionToken(req));
   let chaoxingEvents = [] as ReturnType<typeof gradesToEvents>;
   let chaoxingCourseCount = 0;
@@ -166,4 +171,16 @@ export async function GET(req: NextRequest) {
     }
   }
   return response;
+}
+
+export async function GET(req: NextRequest) {
+  return synchronize(req);
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({})) as { officialCourseNames?: unknown };
+  const cachedOfficialCourseNames = Array.isArray(body.officialCourseNames)
+    ? body.officialCourseNames.filter((name): name is string => typeof name === "string")
+    : [];
+  return synchronize(req, cachedOfficialCourseNames);
 }
