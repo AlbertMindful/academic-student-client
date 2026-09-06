@@ -7,7 +7,8 @@ import { AcademicError } from "@/server/auth/errors";
 import { credentialsAreInvalid, withPersistentAcademicLogin } from "@/server/auth/persistent-login";
 import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credential-token";
 import { serverConfig } from "@/server/config";
-import { chaoxingConnectionFromToken, chaoxingCookieName, chaoxingCookieOptions } from "@/server/chaoxing/connection";
+import { chaoxingConnectionFromToken } from "@/server/chaoxing/connection";
+import { clearChaoxingSessionToken, readChaoxingSessionToken, writeChaoxingSessionToken } from "@/server/chaoxing/session-cookie";
 import { ChaoxingReauthError, getChaoxingAcademicData } from "@/server/chaoxing/provider";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
   }
 
   const officialCourseNames = Array.from(new Set(scheduleResult.data.map((course) => course.courseName).filter(Boolean)));
-  const chaoxingConnection = chaoxingConnectionFromToken(req.cookies.get(chaoxingCookieName)?.value);
+  const chaoxingConnection = chaoxingConnectionFromToken(readChaoxingSessionToken(req));
   let chaoxingEvents = [] as ReturnType<typeof gradesToEvents>;
   let chaoxingCourseCount = 0;
   let chaoxingCounts = { inbox: 0, activities: 0, assignments: 0, onlineExams: 0 };
@@ -159,9 +160,9 @@ export async function GET(req: NextRequest) {
   }
   if (chaoxingConnection) {
     if (chaoxingHealth.status === "reauth_required") {
-      response.cookies.set(chaoxingCookieName, "", { ...chaoxingCookieOptions(), maxAge: 0 });
+      clearChaoxingSessionToken(response);
     } else {
-      response.cookies.set(chaoxingCookieName, chaoxingConnection.refreshedToken(), chaoxingCookieOptions());
+      writeChaoxingSessionToken(response, chaoxingConnection.refreshedToken());
     }
   }
   return response;
