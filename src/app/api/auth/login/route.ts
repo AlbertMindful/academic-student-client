@@ -3,6 +3,7 @@ import { serverConfig } from "@/server/config";
 import { login } from "@/server/auth/academicAuth";
 import { errorResponse, sessionCookieOptions, toErrorResponse } from "@/server/api-helpers";
 import { hit } from "@/server/rate-limit";
+import { credentialCookieName, credentialCookieOptions, sealCredentials } from "@/server/auth/credential-token";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +32,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 密码仅在此处用于完成登录，函数返回后即丢弃（不落库、不缓存、不写日志）。
     const sessionId = await login({ username, password });
     const res = NextResponse.json({ ok: true });
     res.cookies.set(serverConfig.sessionCookieName, sessionId, sessionCookieOptions());
+    res.cookies.set(credentialCookieName, sealCredentials({ username, password }), credentialCookieOptions());
     return res;
   } catch (e) {
     return toErrorResponse(e);

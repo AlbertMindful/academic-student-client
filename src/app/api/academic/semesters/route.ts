@@ -1,15 +1,17 @@
-import { NextRequest } from "next/server";
-import { getAdapter } from "@/server/auth/academicAuth";
-import { readSessionId, toErrorResponse } from "@/server/api-helpers";
+import { NextRequest, NextResponse } from "next/server";
+import { persistentLoginErrorResponse, withPersistentAcademicLogin } from "@/server/auth/persistent-login";
+import { sessionCookieOptions } from "@/server/api-helpers";
+import { serverConfig } from "@/server/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const adapter = getAdapter(readSessionId(req));
-    const semesters = await adapter.getSemesters();
-    return Response.json(semesters);
+    const result = await withPersistentAcademicLogin(req, (adapter) => adapter.getSemesters());
+    const response = NextResponse.json(result.data);
+    if (result.renewedSessionToken) response.cookies.set(serverConfig.sessionCookieName, result.renewedSessionToken, sessionCookieOptions());
+    return response;
   } catch (e) {
-    return toErrorResponse(e);
+    return persistentLoginErrorResponse(e);
   }
 }

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chaoxingClientFromToken, chaoxingCookieName, chaoxingCookieOptions } from "@/server/chaoxing/connection";
+import { chaoxingConnectionFromToken, chaoxingCookieName, chaoxingCookieOptions } from "@/server/chaoxing/connection";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  return Response.json({ connected: Boolean(chaoxingClientFromToken(req.cookies.get(chaoxingCookieName)?.value)) });
+  const connection = chaoxingConnectionFromToken(req.cookies.get(chaoxingCookieName)?.value);
+  const response = NextResponse.json({ connected: Boolean(connection) });
+  if (connection) response.cookies.set(chaoxingCookieName, connection.refreshedToken(), chaoxingCookieOptions());
+  return response;
 }
 
 export async function DELETE() {
