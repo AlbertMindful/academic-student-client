@@ -178,6 +178,12 @@ export interface AcademicEvent {
   title: string;
   summary?: string;
   courseName?: string;
+  /** When the source published the information (not its due time). */
+  publishedAt?: string;
+  sender?: string;
+  sourceUnread?: boolean;
+  /** Short human label such as 收件箱 / 课程作业 / 线上考试. */
+  contextLabel?: string;
   startsAt?: string;
   endsAt?: string;
   dueAt?: string;

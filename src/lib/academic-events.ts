@@ -68,6 +68,7 @@ export function scoreAcademicEvent(event: AcademicEvent, now = new Date()): numb
     material: 12,
   };
   let score = base[event.kind];
+  if (event.sourceUnread) score += 6;
   const minutes = minutesUntil(event, now);
   if (minutes != null) {
     if (minutes < -180) score -= event.kind === "class" ? 70 : 28;

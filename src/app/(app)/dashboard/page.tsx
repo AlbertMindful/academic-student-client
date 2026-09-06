@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlarmClock, BookOpen, CalendarClock, Check, ChevronRight, CircleAlert, EyeOff, MoreHorizontal, Pin, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
+import { AlarmClock, BookOpen, CalendarClock, Check, ChevronRight, CircleAlert, ExternalLink, EyeOff, FileText, Mail, MoreHorizontal, Pin, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
 import type { AcademicEvent, AcademicEventState, ProviderHealth } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
 import { useSession } from "@/hooks/use-session";
@@ -30,13 +30,18 @@ function eventMeta(event: AcademicEvent): string {
   const dateLabel = event.dueAt || event.startsAt
     ? dateTimeFormatter.format(new Date(anchor!))
     : anchor ? new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", weekday: "short" }).format(new Date(`${anchor}T12:00:00`)) : undefined;
-  return [dateLabel, event.location].filter(Boolean).join(" · ");
+  const publishedLabel = !anchor && event.publishedAt
+    ? `${dateTimeFormatter.format(new Date(event.publishedAt))} 发布`
+    : undefined;
+  return [dateLabel ?? publishedLabel, event.location, event.contextLabel].filter(Boolean).join(" · ");
 }
 
 function iconFor(event: AcademicEvent) {
   if (event.kind === "exam") return CalendarClock;
   if (event.kind === "assignment") return AlarmClock;
   if (event.kind === "class" || event.kind === "schedule_change") return BookOpen;
+  if (event.kind === "material") return FileText;
+  if (event.kind === "notice") return Mail;
   return CircleAlert;
 }
 
@@ -76,6 +81,7 @@ function EventRow({ event, state, onOpen, onState }: { event: AcademicEvent; sta
       <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
         <div className="flex items-center gap-2">
           <span className={cn("truncate text-sm font-medium text-foreground", state?.done && "line-through text-muted-foreground")}>{event.title}</span>
+          {event.contextLabel && <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground sm:inline">{event.contextLabel}</span>}
           {state?.pinned && <Pin className="h-3 w-3 shrink-0 fill-current text-primary" />}
           {!state?.read && event.kind !== "class" && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
         </div>
@@ -146,7 +152,7 @@ export default function DashboardPage() {
         </aside>
       </div>
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="sm:max-w-lg">{selected && <><DialogHeader><DialogTitle>{selected.title}</DialogTitle><DialogDescription>{eventMeta(selected) || "学校暂未提供明确时间"}</DialogDescription></DialogHeader>{selected.summary && <p className="text-sm leading-6">{selected.summary}</p>}{selected.conflicts?.length ? <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-800 dark:text-amber-200"><div className="font-medium">来源信息存在差异，已采用教务系统数据</div>{selected.conflicts.map((conflict) => <div key={conflict.field} className="mt-1 opacity-80">{conflict.field === "date" ? "日期" : conflict.field === "time" ? "时间" : conflict.field === "location" ? "地点" : "状态"}：教务系统 {conflict.academicValue ?? "未提供"}；其他来源 {conflict.otherValue ?? "未提供"}</div>)}</div> : null}<div className="space-y-2 border-t pt-4"><div className="text-xs font-medium text-muted-foreground">来源</div><div className="flex flex-wrap gap-2">{selected.sources.map((source) => <Badge key={`${source.provider}:${source.sourceId}`} variant="secondary">{source.providerLabel}</Badge>)}</div>{selected.merge && <p className="text-xs text-muted-foreground">{selected.merge.reason}（{Math.round(selected.merge.confidence * 100)}%）</p>}</div></>}</DialogContent>
+        <DialogContent className="sm:max-w-lg">{selected && <><DialogHeader><DialogTitle>{selected.title}</DialogTitle><DialogDescription>{eventMeta(selected) || selected.status || "暂无明确时间"}</DialogDescription></DialogHeader>{selected.summary && <p className="text-sm leading-6">{selected.summary}</p>}{selected.conflicts?.length ? <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-800 dark:text-amber-200"><div className="font-medium">来源信息存在差异，已采用教务系统数据</div>{selected.conflicts.map((conflict) => <div key={conflict.field} className="mt-1 opacity-80">{conflict.field === "date" ? "日期" : conflict.field === "time" ? "时间" : conflict.field === "location" ? "地点" : "状态"}：教务系统 {conflict.academicValue ?? "未提供"}；其他来源 {conflict.otherValue ?? "未提供"}</div>)}</div> : null}<div className="space-y-2 border-t pt-4"><div className="text-xs font-medium text-muted-foreground">来源</div><div className="flex flex-wrap gap-2">{selected.sources.map((source) => source.url ? <a key={`${source.provider}:${source.sourceId}`} href={source.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md bg-secondary px-2.5 py-1 text-xs text-secondary-foreground transition-colors hover:bg-secondary/75">{source.providerLabel}<ExternalLink className="h-3 w-3" /></a> : <Badge key={`${source.provider}:${source.sourceId}`} variant="secondary">{source.providerLabel}</Badge>)}</div>{selected.merge && <p className="text-xs text-muted-foreground">{selected.merge.reason}（{Math.round(selected.merge.confidence * 100)}%）</p>}</div></>}</DialogContent>
       </Dialog>
     </div>
   );
