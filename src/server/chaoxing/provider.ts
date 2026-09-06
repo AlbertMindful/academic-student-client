@@ -41,6 +41,25 @@ function cleanText(value: string): string {
   return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function cleanMessageContent(value: unknown): string | undefined {
+  const raw = stringValue(value);
+  if (!raw) return undefined;
+  const $ = cheerio.load(`<div id="academic-message-root">${raw}</div>`);
+  const root = $("#academic-message-root");
+  root.find("script,style,noscript,svg,button").remove();
+  root.find("br").replaceWith("\n");
+  root.find("p,li,blockquote,div").each((_, node) => { $(node).prepend("\n").append("\n"); });
+  const text = root.text()
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => cleanText(line))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  if (!text || /^(?:null|undefined)$/i.test(text)) return undefined;
+  return text.slice(0, 6000);
+}
+
 function stringValue(value: unknown): string {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
@@ -133,6 +152,7 @@ interface InboxFields {
   sender?: string;
   unread?: boolean;
   url?: string;
+  content?: string;
 }
 
 function inboxEventFromFields(
@@ -157,13 +177,14 @@ function inboxEventFromFields(
   if (extractedCourse && officialCourseNames.length && !officialCourse) return null;
 
   const sender = cleanText(fields.sender ?? "") || undefined;
+  const content = cleanMessageContent(fields.content);
   const kind = classifyTitle(title);
   const eventTitle = kind === "notice" || kind === "material" ? title : title.replace(/^作业[:：]\s*/, "");
   return makeEvent({
     id: `${kind}_${stableHash(`inbox:${fields.sourceId}`)}`,
     kind,
     title: eventTitle,
-    summary: [officialCourse, sender ? `来自 ${sender}` : "", "收件箱"].filter(Boolean).join(" · "),
+    summary: content ?? [officialCourse, sender ? `来自 ${sender}` : "", "收件箱"].filter(Boolean).join(" · "),
     courseName: officialCourse,
     publishedAt,
     sender,
@@ -174,7 +195,7 @@ function inboxEventFromFields(
       providerLabel: "学习通",
       sourceId: `inbox:${fields.sourceId}`,
       url: safeChaoxingUrl(fields.url ?? "", pageUrl) ?? HOME_URL,
-      raw: { sender, publishedAt, channel: "inbox" },
+      raw: { sender, publishedAt, channel: "inbox", contentAvailable: Boolean(content) },
     }],
     firstSeenAt: fetchedAt,
     updatedAt: publishedAt ?? fetchedAt,
@@ -199,6 +220,7 @@ function parseInboxPage(
       sender: item.find(".receiverName").first().text(),
       unread: item.find(".redDot").filter((_, dot) => $(dot).css("opacity") !== "0").length > 0,
       url: item.find(".openNotice").first().attr("data-url"),
+      content: item.find(".notice_content,.notice-content,.notice_summary,.notice-summary").first().html() ?? undefined,
     }, pageUrl, officialCourseNames, fetchedAt);
     if (event) events.push(event);
   });
@@ -232,10 +254,67 @@ function parseInboxApi(payload: unknown, pageUrl: string, officialCourseNames: s
       sender: stringValue(item.createrName),
       unread: Number(item.isread) === 0 && Number(item.redDot) === 0,
       url: stringValue(item.sourceUrl) || detailPath,
+      content: stringValue(item.content ?? item.contentText ?? item.contentTxt ?? item.noticeContent ?? item.summary ?? item.abstract),
     }, pageUrl, officialCourseNames, fetchedAt);
     if (event && !events.some((current) => current.id === event.id)) events.push(event);
   }
   return events;
+}
+
+function parseInboxDetail(html: string, title: string): string | undefined {
+  const $ = cheerio.load(html);
+  $("script,style,noscript,svg,header,footer,nav,.header,.footer,.toolbar,.operation,.operate").remove();
+  const selectors = [
+    "#noticeContent",
+    ".noticeContent",
+    ".notice-content",
+    ".notice_content",
+    ".notice-detail-content",
+    ".notice_detail_content",
+    ".detail-content",
+    ".detail_content",
+    ".article-content",
+    ".article_content",
+    ".message-content",
+    ".msg-content",
+    "textarea[name*='content']",
+  ];
+  for (const selector of selectors) {
+    for (const node of $(selector).toArray()) {
+      const element = $(node);
+      const content = cleanMessageContent(element.is("textarea") ? element.val() : element.html());
+      if (content && content !== title && content.length >= 2) return content;
+    }
+  }
+  return undefined;
+}
+
+async function hydrateInboxDetails(
+  client: SchoolHttpClient,
+  events: AcademicEvent[],
+  inboxUrl: string,
+): Promise<AcademicEvent[]> {
+  return mapWithConcurrency(events, 4, async (event) => {
+    const source = event.sources.find((item) => item.provider === "chaoxing");
+    const raw = source?.raw && typeof source.raw === "object" ? source.raw as Record<string, unknown> : {};
+    if (raw.contentAvailable || !source?.url) return event;
+    try {
+      const detail = await client.get(source.url, { headers: { Referer: inboxUrl } });
+      if (isChaoxingLoginPage(detail.url, detail.body)) throw new ChaoxingReauthError();
+      const content = parseInboxDetail(detail.body, event.title);
+      if (!content) return event;
+      return {
+        ...event,
+        summary: content,
+        sources: event.sources.map((item) => item === source
+          ? { ...item, raw: { ...raw, contentAvailable: true } }
+          : item),
+      };
+    } catch (cause) {
+      if (cause instanceof ChaoxingReauthError) throw cause;
+      return event;
+    }
+  });
 }
 
 function parseWorkPage(html: string, course: ChaoxingCourse, pageUrl: string, fetchedAt: string): AcademicEvent[] {
@@ -411,7 +490,7 @@ async function fetchInbox(
     const page = await client.get(inboxUrl, { headers: { Referer: HOME_URL } });
     if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
     const renderedEvents = parseInboxPage(page.body, inboxUrl, officialCourseNames, fetchedAt);
-    if (renderedEvents.length) return { events: renderedEvents };
+    if (renderedEvents.length) return { events: await hydrateInboxDetails(client, renderedEvents, inboxUrl) };
 
     // The current inbox returns an HTML shell and fills its list through a
     // read-only JSON request. A server-side fetch does not execute that script.
@@ -425,7 +504,7 @@ async function fetchInbox(
     let payload: unknown;
     try { payload = JSON.parse(result.body); } catch { return { events: [], warning: "收件箱暂时无法更新" }; }
     const events = parseInboxApi(payload, inboxUrl, officialCourseNames, fetchedAt);
-    return { events };
+    return { events: await hydrateInboxDetails(client, events, inboxUrl) };
   } catch (cause) {
     if (cause instanceof ChaoxingReauthError) throw cause;
     return { events: [], warning: "收件箱暂时无法更新" };
