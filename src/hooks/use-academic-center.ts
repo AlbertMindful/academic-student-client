@@ -17,6 +17,7 @@ export function useAcademicCenter() {
   const [syncing, setSyncing] = React.useState(false);
   const [error, setError] = React.useState<ApiError | null>(null);
   const syncRef = React.useRef(0);
+  const cacheRef = React.useRef<AcademicCache | null>(null);
 
   const sync = React.useCallback(async () => {
     if (syncing) return;
@@ -24,10 +25,11 @@ export function useAcademicCenter() {
     setSyncing(true);
     setError(null);
     try {
-      const payload = await api.syncAcademicCenter();
+      const payload = await api.syncAcademicCenter(cacheRef.current?.payload.officialCourseNames ?? []);
       if (requestNumber !== syncRef.current) return;
       setCache((current) => {
         const next = reconcileSync(payload, current);
+        cacheRef.current = next;
         void saveAcademicCache(next);
         return next;
       });
@@ -47,6 +49,7 @@ export function useAcademicCenter() {
     loadAcademicCache().then((stored) => {
       if (cancelled) return;
       setCache(stored);
+      cacheRef.current = stored;
       setLoadingCache(false);
       // Stale-while-revalidate: paint local data first, then refresh quietly.
       window.setTimeout(() => void sync(), 0);
@@ -66,6 +69,7 @@ export function useAcademicCenter() {
     setCache((current) => {
       if (!current) return current;
       const next = updateEventState(current, eventId, patch);
+      cacheRef.current = next;
       void saveAcademicCache(next);
       return next;
     });
