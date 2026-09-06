@@ -196,6 +196,12 @@ export interface AcademicEvent {
     confidence: number;
     reason: string;
   };
+  conflicts?: Array<{
+    field: "time" | "date" | "location" | "status";
+    academicValue?: string;
+    otherValue?: string;
+    resolution: "academic_preferred";
+  }>;
 }
 
 export interface AcademicEventState {

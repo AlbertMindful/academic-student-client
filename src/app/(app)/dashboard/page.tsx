@@ -118,7 +118,7 @@ export default function DashboardPage() {
     if (event.kind === "class") return false;
     const anchor = eventAnchor(event);
     const days = anchor ? (new Date(anchor).getTime() - now.getTime()) / 86_400_000 : null;
-    return cache?.states[event.id]?.pinned || event.kind === "schedule_change" || (days != null && days >= -0.2 && days <= 7) || (!cache?.states[event.id]?.read && event.kind !== "grade");
+    return cache?.states[event.id]?.pinned || event.kind === "schedule_change" || (days != null && days >= -0.2 && days <= 7) || !cache?.states[event.id]?.read;
   }).slice(0, 8);
   const future = visible.filter((event) => event.kind !== "class" && !attention.some((item) => item.id === event.id) && Boolean(eventAnchor(event))).sort((a, b) => (eventAnchor(a) ?? "").localeCompare(eventAnchor(b) ?? "")).slice(0, 7);
 
@@ -133,7 +133,7 @@ export default function DashboardPage() {
         <div><p className="text-sm text-muted-foreground">{dayFormatter.format(now)}</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{noAttention ? "今天没有什么需要特别处理" : `${profile?.name ?? "你"}，今天有 ${attention.length} 件事值得留意`}</h1>{payload.teachingWeek && <p className="mt-2 text-xs text-muted-foreground">第 {payload.teachingWeek.current} 教学周</p>}</div>
         <div className="flex items-center gap-1"><SourceHealth providers={payload.providers} syncing={syncing} /><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void sync()} disabled={syncing} aria-label="立即更新"><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} /></Button></div>
       </header>
-      {error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />更新失败，已保留并显示上次结果。</div>}
+      {error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />{error.code === "SESSION_EXPIRED" ? <>教务系统登录已过期，当前仍显示上次结果。<Link href="/login" className="font-medium underline underline-offset-2">重新登录</Link></> : "更新失败，已保留并显示上次结果。"}</div>}
       <div className="grid gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.8fr)]">
         <div className="space-y-10">
           <EventSection title="需要注意" events={attention} states={cache.states} onOpen={setSelected} onState={setEventState} empty="今天没有临近截止、考试或未读的重要变化" />
@@ -145,7 +145,7 @@ export default function DashboardPage() {
         </aside>
       </div>
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="sm:max-w-lg">{selected && <><DialogHeader><DialogTitle>{selected.title}</DialogTitle><DialogDescription>{eventMeta(selected) || "学校暂未提供明确时间"}</DialogDescription></DialogHeader>{selected.summary && <p className="text-sm leading-6">{selected.summary}</p>}<div className="space-y-2 border-t pt-4"><div className="text-xs font-medium text-muted-foreground">来源</div><div className="flex flex-wrap gap-2">{selected.sources.map((source) => <Badge key={`${source.provider}:${source.sourceId}`} variant="secondary">{source.providerLabel}</Badge>)}</div>{selected.merge && <p className="text-xs text-muted-foreground">{selected.merge.reason}（{Math.round(selected.merge.confidence * 100)}%）</p>}</div></>}</DialogContent>
+        <DialogContent className="sm:max-w-lg">{selected && <><DialogHeader><DialogTitle>{selected.title}</DialogTitle><DialogDescription>{eventMeta(selected) || "学校暂未提供明确时间"}</DialogDescription></DialogHeader>{selected.summary && <p className="text-sm leading-6">{selected.summary}</p>}{selected.conflicts?.length ? <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-5 text-amber-800 dark:text-amber-200"><div className="font-medium">来源信息存在差异，已采用教务系统数据</div>{selected.conflicts.map((conflict) => <div key={conflict.field} className="mt-1 opacity-80">{conflict.field === "date" ? "日期" : conflict.field === "time" ? "时间" : conflict.field === "location" ? "地点" : "状态"}：教务系统 {conflict.academicValue ?? "未提供"}；其他来源 {conflict.otherValue ?? "未提供"}</div>)}</div> : null}<div className="space-y-2 border-t pt-4"><div className="text-xs font-medium text-muted-foreground">来源</div><div className="flex flex-wrap gap-2">{selected.sources.map((source) => <Badge key={`${source.provider}:${source.sourceId}`} variant="secondary">{source.providerLabel}</Badge>)}</div>{selected.merge && <p className="text-xs text-muted-foreground">{selected.merge.reason}（{Math.round(selected.merge.confidence * 100)}%）</p>}</div></>}</DialogContent>
       </Dialog>
     </div>
   );
