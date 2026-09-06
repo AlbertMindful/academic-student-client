@@ -76,6 +76,8 @@ function meaningfulSignature(event: AcademicEvent): string {
     startsAt: event.startsAt,
     endsAt: event.endsAt,
     dueAt: event.dueAt,
+    startsOn: event.startsOn,
+    dueOn: event.dueOn,
     location: event.location,
     status: event.status,
     sources: event.sources.map(({ provider, sourceId }) => ({ provider, sourceId })),
@@ -136,6 +138,12 @@ export function reconcileSync(
   const failed = failedKinds(incoming);
   for (const old of previous?.payload.events ?? []) {
     if (failed.has(old.kind) && !events.some((event) => event.id === old.id)) events.push(old);
+  }
+  for (const provider of incoming.providers) {
+    if (provider.status !== "degraded" && provider.status !== "reauth_required") continue;
+    for (const old of previous?.payload.events ?? []) {
+      if (old.sources.some((source) => source.provider === provider.provider) && !events.some((event) => event.id === old.id)) events.push(old);
+    }
   }
 
   // Turn a changed future class record into a first-class event. Retain recent

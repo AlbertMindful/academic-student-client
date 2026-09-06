@@ -7,6 +7,7 @@ import { useAcademicCenter } from "@/hooks/use-academic-center";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ChaoxingConnect } from "@/components/chaoxing-connect";
 
 const formatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 
@@ -23,11 +24,11 @@ export default function DataPage() {
       </div>
       <section className="space-y-1">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">信息来源</h2>
-        {(payload?.providers ?? []).map((provider) => <div key={provider.provider} className="flex items-center gap-3 border-b border-border/60 py-3.5 last:border-0"><span className={cn("h-2 w-2 rounded-full", provider.status === "ok" ? "bg-emerald-500" : provider.status === "not_connected" ? "bg-muted-foreground/40" : "bg-amber-500")} /><div className="min-w-0 flex-1"><div className="text-sm font-medium">{provider.label}</div><div className="mt-0.5 text-xs text-muted-foreground">{provider.message}{provider.lastSuccessAt ? ` · 最近成功 ${formatter.format(new Date(provider.lastSuccessAt))}` : ""}</div></div><Badge variant="outline">{provider.status === "ok" ? "正常" : provider.status === "not_connected" ? "未连接" : "部分可用"}</Badge></div>)}
+        {(payload?.providers ?? []).map((provider) => <div key={provider.provider} className="flex items-center gap-3 border-b border-border/60 py-3.5 last:border-0"><span className={cn("h-2 w-2 rounded-full", provider.status === "ok" ? "bg-emerald-500" : provider.status === "not_connected" ? "bg-muted-foreground/40" : "bg-amber-500")} /><div className="min-w-0 flex-1"><div className="text-sm font-medium">{provider.label}</div><div className="mt-0.5 text-xs text-muted-foreground">{provider.message}{provider.lastSuccessAt ? ` · 最近成功 ${formatter.format(new Date(provider.lastSuccessAt))}` : ""}</div></div>{provider.provider === "chaoxing" ? <ChaoxingConnect onConnected={() => void sync()} /> : <Badge variant="outline">{provider.status === "ok" ? "正常" : "部分可用"}</Badge>}</div>)}
       </section>
       <section className="mt-10">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">本地数据</h2>
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-4">{Object.entries(payload?.diagnostics.counts ?? {}).map(([name, count]) => <div key={name} className="bg-background p-4"><div className="text-xl font-semibold tabular-nums">{count}</div><div className="mt-1 text-xs text-muted-foreground">{name === "courses" ? "课程" : name === "exams" ? "考试" : name === "grades" ? "成绩" : "整理后事件"}</div></div>)}</div>
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-5">{Object.entries(payload?.diagnostics.counts ?? {}).map(([name, count]) => <div key={name} className="bg-background p-4"><div className="text-xl font-semibold tabular-nums">{count}</div><div className="mt-1 text-xs text-muted-foreground">{name === "courses" ? "课程" : name === "exams" ? "考试" : name === "grades" ? "成绩" : name === "chaoxingCourses" ? "学习通课程" : "整理后事件"}</div></div>)}</div>
         <div className="mt-4 flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><span>学业数据与已读、完成、忽略、置顶状态保存在当前设备。即使服务暂时不可用，也会继续显示最近一次成功同步的内容。</span></div>
       </section>
       <section className="mt-10">

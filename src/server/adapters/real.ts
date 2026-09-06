@@ -48,6 +48,9 @@ function classifyLoginError(msg: string): AcademicErrorCode {
   if (/频繁|上限|次数|超限|过快|太多|稍后|限制|冻结/.test(m)) return "SMS_LIMIT";
   if (/(验证码|动态码).*(错误|不正确|已过期|失效|有误|无效)|(?:错误|不正确|已过期|失效|有误|无效).*(验证码|动态码)/.test(m)) return "WRONG_CODE";
   if (/滑块|人机|图形验证码/.test(m)) return "CAPTCHA_REQUIRED";
+  // Some SSO responses deliberately combine "account does not exist" and
+  // "wrong password". Do not present that ambiguous message as a certain fact.
+  if (/(不存在|无此用户).*(密码|凭证)|(密码|凭证).*(不存在|无此用户)/.test(m)) return "INVALID_CREDENTIALS";
   if (/不存在|无此用户|未注册|未绑定(?:手机|手机号)|手机号.*未绑定/.test(m)) return "ACCOUNT_NOT_FOUND";
   if (/密码|口令/.test(m)) return "WRONG_PASSWORD";
   if (/维护|升级|暂停服务/.test(m)) return "MAINTENANCE";
