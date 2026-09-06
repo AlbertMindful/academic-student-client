@@ -21,12 +21,14 @@ export function ChaoxingConnect({ onConnected, requiresReconnect = false }: { on
   React.useEffect(() => {
     if (!open || !pendingId || (status !== "waiting" && status !== "scanned")) return;
     const id = window.setInterval(() => {
-      void api.pollChaoxingConnection(pendingId).then((result) => {
+      void api.pollChaoxingConnection(pendingId).then(async (result) => {
         setStatus(result.status);
         if (result.status === "connected") {
-          setConnected(true);
           window.clearInterval(id);
-          onConnected?.();
+          const verified = await api.getChaoxingSession().catch(() => ({ connected: false }));
+          setConnected(verified.connected);
+          if (verified.connected) onConnected?.();
+          else setStatus("error");
         }
       }).catch(() => setStatus("error"));
     }, 3000);
@@ -61,7 +63,7 @@ export function ChaoxingConnect({ onConnected, requiresReconnect = false }: { on
             {status === "waiting" && <p className="mt-4 text-sm text-muted-foreground">等待扫码…</p>}
             {status === "scanned" && <p className="mt-4 text-sm font-medium text-primary">已扫码，请在手机上确认</p>}
             {status === "connected" && <><span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"><Check className="h-6 w-6" /></span><p className="mt-4 text-sm font-medium">学习通已连接</p><Button className="mt-5" size="sm" onClick={() => setOpen(false)}>完成</Button></>}
-            {(status === "expired" || status === "error") && <><p className="text-sm text-muted-foreground">二维码已失效或暂时无法连接。</p><Button className="mt-4" variant="outline" size="sm" onClick={() => void begin()}>重新获取</Button></>}
+            {(status === "expired" || status === "error") && <><p className="max-w-xs text-center text-sm leading-6 text-muted-foreground">连接没有完成，请重新获取二维码并在学习通 App 中确认登录。</p><Button className="mt-4" variant="outline" size="sm" onClick={() => void begin()}>重新获取</Button></>}
           </div>
         </DialogContent>
       </Dialog>

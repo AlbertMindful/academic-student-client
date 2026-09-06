@@ -124,7 +124,7 @@ export const api = {
   startChaoxingConnection(): Promise<{ pendingId: string }> {
     return request("/api/chaoxing/connect/start", { method: "POST" });
   },
-  pollChaoxingConnection(pendingId: string): Promise<{ status: "waiting" | "scanned" | "connected" | "expired" }> {
+  pollChaoxingConnection(pendingId: string): Promise<{ status: "waiting" | "scanned" | "connected" | "expired" | "error" }> {
     return request("/api/chaoxing/connect/poll", { method: "POST", body: JSON.stringify({ pendingId }) });
   },
   getChaoxingSession(): Promise<{ connected: boolean }> {

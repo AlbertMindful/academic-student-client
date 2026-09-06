@@ -6,6 +6,8 @@ import { serverConfig } from "@/server/config";
 
 const PASSPORT = "https://passport2.chaoxing.com";
 const LOGIN_URL = `${PASSPORT}/login?fid=&newversion=true&refer=https%3A%2F%2Fi.chaoxing.com`;
+const HOME_URL = "https://i.chaoxing.com";
+const COURSE_API = "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?rss=1&view=json";
 const PENDING_TTL = 4 * 60_000;
 const SESSION_TTL = Number(process.env.CHAOXING_SESSION_TTL_MS ?? 180 * 24 * 60 * 60_000);
 
@@ -54,7 +56,7 @@ export function chaoxingQrUrl(connection: PendingConnection): string {
 export async function pollChaoxingConnection(id: string): Promise<
   | { status: "waiting" | "scanned" }
   | { status: "connected"; token: string }
-  | { status: "expired" }
+  | { status: "expired" | "error" }
 > {
   const connection = getPendingConnection(id);
   if (!connection) return { status: "expired" };
@@ -64,9 +66,32 @@ export async function pollChaoxingConnection(id: string): Promise<
     doubleFactorLogin: "0",
     forbidotherlogin: "0",
   }, { headers: { Referer: LOGIN_URL, "X-Requested-With": "XMLHttpRequest" } });
-  let result: { status?: boolean; type?: number };
+  let result: { status?: boolean; type?: number; containTwoFactorLogin?: boolean };
   try { result = JSON.parse(response.body); } catch { return { status: "waiting" }; }
   if (result.status) {
+    // The official page navigates to i.chaoxing.com after QR confirmation. That
+    // navigation is part of login finalisation and may issue the cookies needed
+    // by course/inbox hosts; sealing the jar before it creates a false success.
+    if (result.containTwoFactorLogin) {
+      pending.delete(id);
+      return { status: "error" };
+    }
+    try {
+      const home = await connection.client.get(HOME_URL, { headers: { Referer: LOGIN_URL } });
+      if (new URL(home.url).hostname.endsWith("passport2.chaoxing.com") || /<title>\s*用户登录\s*<\/title>/i.test(home.body)) {
+        pending.delete(id);
+        return { status: "error" };
+      }
+      const courses = await connection.client.get(COURSE_API, { headers: { Referer: HOME_URL } });
+      const payload = JSON.parse(courses.body) as { result?: number | boolean; status?: boolean };
+      if (payload.result === 0 || payload.status === false) {
+        pending.delete(id);
+        return { status: "error" };
+      }
+    } catch {
+      pending.delete(id);
+      return { status: "error" };
+    }
     pending.delete(id);
     const now = Date.now();
     return { status: "connected", token: sealChaoxingSession({ version: 1, cookies: connection.jar.toJSON(), createdAt: now, expiresAt: now + SESSION_TTL }) };
