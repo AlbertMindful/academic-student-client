@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDays,
+  Bell,
   ChartNoAxesColumn,
   ClipboardList,
   Compass,
@@ -14,12 +15,12 @@ import {
   ListTodo,
   Menu,
   User,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { useRequireAuth } from "@/hooks/use-session";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { DataChangeCenter } from "@/components/data-change-center";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const NAV = [
-  { href: "/dashboard", label: "总览", icon: LayoutDashboard },
+  { href: "/dashboard", label: "今天", icon: LayoutDashboard },
+  { href: "/activity", label: "所有动态", icon: Bell },
   { href: "/schedule", label: "课表", icon: CalendarDays },
   { href: "/grades", label: "成绩", icon: ChartNoAxesColumn },
   { href: "/exams", label: "考试", icon: ClipboardList },
@@ -57,8 +59,8 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
             className={cn(
               "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
               active
-                ? "bg-primary text-primary-foreground shadow-[0_8px_20px_hsl(var(--primary)/.22)]"
-                : "text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground",
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             <Icon className="h-[18px] w-[18px]" />
@@ -115,12 +117,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* 桌面侧边栏 */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/70 bg-card/70 backdrop-blur-2xl md:flex">
         <div className="flex items-center gap-3 px-5 py-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_20px_hsl(var(--primary)/.24)]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background">
             <GraduationCap className="h-[18px] w-[18px]" />
           </div>
           <div>
-            <span className="block text-sm font-semibold tracking-tight">教务助手</span>
-            <span className="block text-[11px] text-muted-foreground">我的学习中心</span>
+            <span className="block text-sm font-semibold tracking-tight">学业中心</span>
+            <span className="block text-[11px] text-muted-foreground">今天需要知道什么</span>
           </div>
         </div>
         <div className="flex-1 px-3">
@@ -151,14 +153,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <NavItems />
               </DropdownMenuContent>
             </DropdownMenu>
-            <span className="text-sm font-medium md:hidden">教务助手</span>
+            <span className="text-sm font-medium md:hidden">学业中心</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <PwaInstallButton />
-            {profile?.studentId && (
-              <DataChangeCenter studentId={profile.studentId} />
-            )}
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -186,6 +185,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/data">
+                    <Database className="h-4 w-4" />
+                    数据与同步
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();

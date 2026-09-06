@@ -10,7 +10,7 @@
     --card-foreground: 222 38% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 252 76% 58%;
+    --primary: 222 72% 52%;
     --primary-foreground: 0 0% 98%;
     --secondary: 246 24% 95%;
     --secondary-foreground: 240 5.9% 10%;
@@ -22,7 +22,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 220 20% 90%;
     --input: 220 20% 88%;
-    --ring: 252 76% 58%;
+    --ring: 222 72% 52%;
     --radius: 0.9rem;
   }
 
@@ -33,7 +33,7 @@
     --card-foreground: 0 0% 98%;
     --popover: 224 22% 10%;
     --popover-foreground: 0 0% 98%;
-    --primary: 252 91% 72%;
+    --primary: 215 92% 70%;
     --primary-foreground: 240 5.9% 10%;
     --secondary: 226 17% 16%;
     --secondary-foreground: 0 0% 98%;
@@ -45,7 +45,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 225 16% 18%;
     --input: 225 16% 20%;
-    --ring: 252 91% 72%;
+    --ring: 215 92% 70%;
   }
 }
 
@@ -56,10 +56,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
-    background-image:
-      radial-gradient(circle at 85% 0%, hsl(var(--primary) / 0.07), transparent 32rem),
-      radial-gradient(circle at 0% 80%, hsl(184 70% 48% / 0.05), transparent 28rem);
-    background-attachment: fixed;
+    background-image: none;
   }
   html {
     -webkit-font-smoothing: antialiased;
