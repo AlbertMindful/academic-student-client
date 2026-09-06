@@ -123,10 +123,12 @@ export function reconcileSync(
   previous: AcademicCache | null,
 ): AcademicCache {
   const previousById = new Map(previous?.payload.events.map((event) => [event.id, event]));
+  const changedIds = new Set<string>();
   const events = incoming.events.map((event) => {
     const old = previousById.get(event.id);
     if (!old) return event;
     const changed = meaningfulSignature(old) !== meaningfulSignature(event);
+    if (changed) changedIds.add(event.id);
     return {
       ...event,
       firstSeenAt: old.firstSeenAt,
@@ -173,6 +175,14 @@ export function reconcileSync(
           pinned: false,
           updatedAt: incoming.syncedAt,
         };
+      }
+    }
+  } else {
+    for (const id of changedIds) {
+      const event = events.find((item) => item.id === id);
+      const state = states[id];
+      if (event?.kind !== "class" && !state?.done && !state?.ignored) {
+        states[id] = { ...(state ?? defaultEventState()), read: false, updatedAt: incoming.syncedAt };
       }
     }
   }

@@ -221,6 +221,41 @@ export interface MergeDecision {
   reason: string;
 }
 
+function authorityConflictMatch(a: AcademicEvent, b: AcademicEvent): boolean {
+  const crossSource = a.sources.some((sourceA) => b.sources.some((sourceB) => sourceA.provider !== sourceB.provider));
+  if (!crossSource || a.kind !== b.kind || !a.courseName || !b.courseName) return false;
+  const sameCourse = normalizedText(a.courseName) === normalizedText(b.courseName) || jaccard(a.courseName, b.courseName) >= 0.88;
+  return sameCourse && jaccard(a.title, b.title) >= 0.74;
+}
+
+function mergeWithAcademicAuthority(a: AcademicEvent, b: AcademicEvent): AcademicEvent {
+  const academic = a.sources.some((sourceItem) => sourceItem.provider === "academic") ? a : b;
+  const other = academic === a ? b : a;
+  const conflicts: NonNullable<AcademicEvent["conflicts"]> = [];
+  const academicAnchor = academic.dueAt ?? academic.startsAt ?? academic.dueOn ?? academic.startsOn;
+  const otherAnchor = other.dueAt ?? other.startsAt ?? other.dueOn ?? other.startsOn;
+  if (academicAnchor && otherAnchor && datePart(academicAnchor) !== datePart(otherAnchor)) {
+    conflicts.push({ field: "date", academicValue: datePart(academicAnchor), otherValue: datePart(otherAnchor), resolution: "academic_preferred" });
+  } else if (academicAnchor && otherAnchor && timePart(academicAnchor) && timePart(otherAnchor) && timePart(academicAnchor) !== timePart(otherAnchor)) {
+    conflicts.push({ field: "time", academicValue: timePart(academicAnchor), otherValue: timePart(otherAnchor), resolution: "academic_preferred" });
+  }
+  if (academic.location && other.location && normalizedText(academic.location) !== normalizedText(other.location)) {
+    conflicts.push({ field: "location", academicValue: academic.location, otherValue: other.location, resolution: "academic_preferred" });
+  }
+  if (academic.status && other.status && normalizedText(academic.status) !== normalizedText(other.status)) {
+    conflicts.push({ field: "status", academicValue: academic.status, otherValue: other.status, resolution: "academic_preferred" });
+  }
+  return {
+    ...academic,
+    sources: [...academic.sources, ...other.sources],
+    firstSeenAt: academic.firstSeenAt < other.firstSeenAt ? academic.firstSeenAt : other.firstSeenAt,
+    updatedAt: academic.updatedAt > other.updatedAt ? academic.updatedAt : other.updatedAt,
+    priority: Math.max(academic.priority, other.priority),
+    merge: { strategy: "similar", confidence: 0.9, reason: "确认是同一事项；冲突字段以教务系统为准" },
+    conflicts,
+  };
+}
+
 /**
  * Conservative cross-source matching. Conflicting dates, times, locations or
  * course names are hard blockers; uncertain pairs remain separate.
@@ -270,6 +305,11 @@ export function deduplicateAcademicEvents(events: AcademicEvent[]): AcademicEven
     }
     const match = result.find((candidate) => canMergeEvents(candidate, event).merge);
     if (!match) {
+      const conflictMatch = result.find((candidate) => authorityConflictMatch(candidate, event));
+      if (conflictMatch) {
+        result.splice(result.indexOf(conflictMatch), 1, mergeWithAcademicAuthority(conflictMatch, event));
+        continue;
+      }
       result.push({ ...event, sources: [...event.sources] });
       continue;
     }
