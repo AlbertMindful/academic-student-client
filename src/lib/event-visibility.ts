@@ -47,7 +47,7 @@ export function isCurrentAcademicEvent(
       return end != null && end >= now - 3 * 60 * 60 * 1000 && end <= now + 7 * DAY_MS;
     case "exam":
       return end != null
-        ? end >= now - 6 * 60 * 60 * 1000
+        ? end >= now
         : !state?.read && recentlyAdded(event, 30, now);
     case "assignment":
       return end != null
