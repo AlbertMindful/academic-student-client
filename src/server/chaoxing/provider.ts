@@ -517,7 +517,7 @@ async function fetchUnifiedTasks(
     try {
       const page = kind === "work"
         ? await client.get(url, { headers: { Referer: HOME_URL } })
-        : await client.post(url, { start: "1", nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: HOME_URL } });
+        : await client.post(url, { start: "0", nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: HOME_URL } });
       if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
       const pageCount = kind === "work"
         ? numericPageCount(page.body, "li.xl-active, li.xl-active ~ li")
@@ -529,7 +529,7 @@ async function fetchUnifiedTasks(
           nextUrl.searchParams.set("pageNum", String(pageNumber));
           return client.get(nextUrl.toString(), { headers: { Referer: url } });
         }
-        return client.post(url, { start: String(pageNumber), nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: url } });
+        return client.post(url, { start: String((pageNumber - 1) * 12), nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: url } });
       }));
       const pages = [page, ...remainingPages];
       if (pages.some((result) => isChaoxingLoginPage(result.url, result.body))) throw new ChaoxingReauthError();
