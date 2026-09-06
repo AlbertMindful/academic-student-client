@@ -65,6 +65,7 @@ function SourceHealth({ providers, syncing }: { providers: ProviderHealth[]; syn
               <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">{provider.label}</span><span className="text-[11px] text-muted-foreground">{provider.status === "ok" ? "正常" : provider.status === "not_connected" ? "未连接" : "需留意"}</span></div>
               <p className="mt-0.5 text-xs text-muted-foreground">{provider.message}</p>
               {provider.provider === "academic" && provider.status === "reauth_required" && <Link href="/login" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">重新连接</Link>}
+              {provider.provider === "chaoxing" && provider.status !== "ok" && <Link href="/data" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">去连接</Link>}
             </div>
           </div>
         ))}
