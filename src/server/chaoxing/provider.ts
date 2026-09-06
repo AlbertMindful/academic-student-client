@@ -7,8 +7,8 @@ import type { SchoolHttpClient } from "@/server/http";
 
 const COURSE_API = "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?rss=1&view=json";
 const HOME_URL = "https://i.chaoxing.com/base";
-const ALL_WORK_URL = "https://mooc1-api.chaoxing.com/work/stu-work";
-const ALL_EXAM_URL = "https://mooc1-api.chaoxing.com/exam-ans/exam/phone/examcode";
+const UNIFIED_WORK_URL = "https://mooc1-api.chaoxing.com/mooc-ans/mooc2/work/all-task";
+const UNIFIED_EXAM_URL = "https://mooc1-2.chaoxing.com/exam-ans/exam/test/examcode/examlist";
 
 export class ChaoxingReauthError extends Error {}
 
@@ -335,15 +335,20 @@ function courseForTask(
   rawUrl: string,
   courses: ChaoxingCourse[],
   officialCourseNames: string[],
+  baseUrl = HOME_URL,
 ): string | undefined {
-  const normalized = cleanText(label).replace(/^(?:课程|来自课程)\s*[:：]?\s*/, "");
+  const normalized = cleanText(label)
+    .replace(/^(?:课程|来自课程)\s*[:：]?\s*/, "")
+    .replace(/^《+|》+$/g, "");
   const byName = normalized
     ? officialCourseNames.find((name) => courseMatches(normalized, name))
     : undefined;
   if (byName) return byName;
   try {
-    const url = new URL(rawUrl, ALL_WORK_URL);
-    const courseId = url.searchParams.get("courseId") ?? url.searchParams.get("courseid");
+    const url = new URL(rawUrl, baseUrl);
+    const decoded = decodeURIComponent(url.searchParams.get("refer") ?? rawUrl);
+    const courseId = url.searchParams.get("courseId") ?? url.searchParams.get("courseid") ?? url.searchParams.get("moocId")
+      ?? decoded.match(/[?&]courseId=(\d+)/i)?.[1];
     const matched = courses.find((course) => course.courseId === courseId);
     if (matched) return officialCourseNames.find((name) => courseMatches(matched.name, name));
   } catch { /* malformed task URL */ }
@@ -359,22 +364,21 @@ function parseGlobalWorkPage(
   const $ = cheerio.load(html);
   const now = new Date(fetchedAt);
   const events: AcademicEvent[] = [];
-  $("ul.nav > li").each((_, node) => {
+  $("li[data][onclick*='goTask'], ul.nav > li[data]").each((_, node) => {
     const item = $(node);
     const option = item.find("div[role='option']").first();
-    if (!option.length) return;
-    const title = cleanText(option.find("p").first().text());
-    const statusElement = option.find("span").eq(0);
+    const content = option.length ? option : item;
+    const title = cleanText(content.find("p").first().text());
+    const statusElement = content.find("span").filter((_, element) => /未提交|未交|待提交|进行中|待批阅|已完成|已截止|已结束/.test(cleanText($(element).text()))).first();
     const status = cleanText(statusElement.text());
-    const courseLabel = cleanText(option.find("span").eq(1).text());
-    const remaining = cleanText(option.find(".fr").first().text());
-    const rawUrl = item.attr("data") ?? option.attr("data") ?? option.find("a[href]").first().attr("href") ?? "";
-    const courseName = courseForTask(courseLabel, rawUrl, courses, officialCourseNames);
+    const courseLabel = cleanText(content.find("span").filter((_, element) => /《.+》/.test(cleanText($(element).text()))).last().text());
+    const remaining = cleanText(content.find(".fr").first().text());
+    const rawUrl = item.attr("data") ?? content.attr("data") ?? content.find("a[href]").first().attr("href") ?? "";
+    const courseName = courseForTask(courseLabel, rawUrl, courses, officialCourseNames, UNIFIED_WORK_URL);
     if (!title || !courseName) return;
-    const explicitlyPending = statusElement.hasClass("status") || /未交|未完成|待提交|进行中/.test(status);
-    if (!explicitlyPending && /已交|已完成|待批阅|已截止|已结束/.test(status)) return;
-    const deadline = parseTaskDeadline(`${remaining} ${option.text()}`, now);
-    const url = safeChaoxingUrl(rawUrl, ALL_WORK_URL) ?? ALL_WORK_URL;
+    if (!/未提交|未交|未完成|待提交|进行中/.test(status) || /已提交|已完成|待批阅|已截止|已结束/.test(status)) return;
+    const deadline = parseTaskDeadline(`${remaining} ${content.text()}`, now);
+    const url = safeChaoxingUrl(rawUrl, UNIFIED_WORK_URL) ?? UNIFIED_WORK_URL;
     const sourceId = rawUrl || `${courseName}:${title}`;
     events.push(makeEvent({
       id: `assignment_${stableHash(`global-work:${sourceId}`)}`,
@@ -403,19 +407,25 @@ function parseGlobalExamPage(
   const $ = cheerio.load(html);
   const now = new Date(fetchedAt);
   const events: AcademicEvent[] = [];
-  $("ul.ks_list > li").each((_, node) => {
+  $("table tr.dataTr, table.dataTable tr").each((_, node) => {
     const item = $(node);
-    const title = cleanText(item.find("dl dt").first().text());
-    const timing = cleanText(item.find("dl dd").first().text());
-    const status = cleanText(item.find(".ks_state").first().text());
-    const rawUrl = item.attr("data") ?? item.find("a[href]").first().attr("href") ?? "";
-    const expired = /ks_02/.test(item.find(".ks_pic img").first().attr("src") ?? "") || /已结束|已过期/.test(status);
-    const finished = /已完成|待批阅|已交卷/.test(status);
-    const courseName = courseForTask("", rawUrl, courses, officialCourseNames)
-      ?? officialCourseNames.find((name) => title.includes(name));
+    const cells = item.find("td");
+    if (cells.length < 6) return;
+    const title = cleanText(cells.eq(1).text());
+    const timing = cleanText(cells.eq(2).text());
+    const examStatus = cleanText(cells.eq(4).text());
+    const answerStatus = cleanText(cells.eq(5).text());
+    const action = cells.eq(8).find("a").first();
+    const onclick = action.attr("onclick") ?? "";
+    const rawUrl = onclick.match(/go\(['"]([^'"]+)/)?.[1] ?? "";
+    const status = [examStatus, answerStatus].filter(Boolean).join(" · ");
+    const expired = /已结束|已过期|已关闭/.test(examStatus);
+    const finished = /已完成|待批阅|已交卷|已提交/.test(answerStatus);
+    const courseName = courseForTask(courseFromTitle(title) ?? "", rawUrl, courses, officialCourseNames, UNIFIED_EXAM_URL);
     if (!title || !courseName || expired || finished) return;
     const deadline = parseTaskDeadline(`${timing} ${item.text()}`, now);
-    const url = safeChaoxingUrl(rawUrl, ALL_EXAM_URL) ?? ALL_EXAM_URL;
+    if (deadline.at && new Date(deadline.at).getTime() < now.getTime()) return;
+    const url = safeChaoxingUrl(rawUrl, UNIFIED_EXAM_URL) ?? UNIFIED_EXAM_URL;
     const sourceId = rawUrl || `${courseName}:${title}`;
     events.push(makeEvent({
       id: `exam_${stableHash(`global-exam:${sourceId}`)}`,
@@ -435,20 +445,65 @@ function parseGlobalExamPage(
   return events;
 }
 
-async function fetchGlobalTasks(
+function parseWorkDetailDeadline(html: string, fetchedAt: string): { at?: string; on?: string } {
+  const $ = cheerio.load(html);
+  const text = cleanText($("body").text());
+  const range = text.match(/(?:作答时间|截止时间|提交时间)\s*[:：]?\s*((?:20\d{2}[-/.年])?\d{1,2}[-/.月]\d{1,2}(?:日)?\s+\d{1,2}:\d{2})\s*(?:至|到|—|-)\s*((?:20\d{2}[-/.年])?\d{1,2}[-/.月]\d{1,2}(?:日)?\s+\d{1,2}:\d{2})/);
+  return parseTaskDeadline(range?.[2] ?? text, new Date(fetchedAt));
+}
+
+async function hydrateWorkDeadlines(
+  client: SchoolHttpClient,
+  events: AcademicEvent[],
+  fetchedAt: string,
+): Promise<AcademicEvent[]> {
+  const now = new Date(fetchedAt);
+  const hydrated = await mapWithConcurrency(events, 4, async (event) => {
+    const source = event.sources[0];
+    if (!source?.url || event.dueAt || event.dueOn) return event;
+    try {
+      const detail = await client.get(source.url, { headers: { Referer: UNIFIED_WORK_URL } });
+      if (isChaoxingLoginPage(detail.url, detail.body)) throw new ChaoxingReauthError();
+      const deadline = parseWorkDetailDeadline(detail.body, fetchedAt);
+      return { ...event, dueAt: deadline.at, dueOn: deadline.on, priority: scoreAcademicEvent({ ...event, dueAt: deadline.at, dueOn: deadline.on }, now) };
+    } catch (cause) {
+      if (cause instanceof ChaoxingReauthError) throw cause;
+      return event;
+    }
+  });
+  return hydrated.filter((event) => !event.dueAt || new Date(event.dueAt).getTime() >= now.getTime());
+}
+
+function discoverUnifiedUrls(homeHtml: string): { work: string; exam: string } {
+  const $ = cheerio.load(homeHtml);
+  const find = (selector: string, fallback: string) => {
+    const raw = $(selector).first().attr("dataurl") ?? $(selector).first().attr("href") ?? fallback;
+    return safeChaoxingUrl(raw, HOME_URL) ?? fallback;
+  };
+  return {
+    work: find("[name='作业'][dataurl], [name='我的作业'][dataurl], [dataurl*='/mooc-ans/mooc2/work/all-task'], [href*='/mooc-ans/mooc2/work/all-task']", UNIFIED_WORK_URL),
+    exam: find("[name='考试'][dataurl], [name='考试列表'][dataurl], [name='在线考试'][dataurl], [dataurl*='/exam/test/examcode/examlist'], [href*='/exam/test/examcode/examlist']", UNIFIED_EXAM_URL),
+  };
+}
+
+async function fetchUnifiedTasks(
   client: SchoolHttpClient,
   courses: ChaoxingCourse[],
   officialCourseNames: string[],
   fetchedAt: string,
 ): Promise<{ events: AcademicEvent[]; warnings: string[] }> {
+  const home = await client.get(HOME_URL);
+  if (isChaoxingLoginPage(home.url, home.body) || /请重新登录/.test(home.body)) throw new ChaoxingReauthError();
+  const urls = discoverUnifiedUrls(home.body);
   const fetchOne = async (kind: "work" | "exam") => {
-    const url = kind === "work" ? ALL_WORK_URL : ALL_EXAM_URL;
+    const url = urls[kind];
     try {
       const page = await client.get(url, { headers: { Referer: HOME_URL } });
       if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
-      return kind === "work"
+      const events = kind === "work"
         ? parseGlobalWorkPage(page.body, courses, officialCourseNames, fetchedAt)
         : parseGlobalExamPage(page.body, courses, officialCourseNames, fetchedAt);
+      return kind === "work" ? hydrateWorkDeadlines(client, events, fetchedAt) : events;
     } catch (cause) {
       if (cause instanceof ChaoxingReauthError) throw cause;
       return null;
@@ -637,7 +692,7 @@ export async function getChaoxingAcademicData(
 
   const [inbox, globalTasks, courseResults] = await Promise.all([
     fetchInbox(client, officialCourseNames, fetchedAt),
-    fetchGlobalTasks(client, discoveredCourses, officialCourseNames, fetchedAt),
+    fetchUnifiedTasks(client, discoveredCourses, officialCourseNames, fetchedAt),
     mapWithConcurrency(courses, 3, (course) => fetchCourseEvents(client, course, fetchedAt)),
   ]);
   const rawEvents = [
