@@ -1,88 +1,88 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowUpRight, CalendarClock, CheckCircle2, MapPin } from "lucide-react";
-import type { Exam } from "@/lib/types";
-import { api } from "@/lib/api-client";
-import { useApi } from "@/hooks/use-api";
-import { isOfficialSpecialExam } from "@/lib/exams";
-import { examCountdown, fullDateCN } from "@/lib/format";
-import { PageHeader } from "@/components/page-header";
-import { ErrorState } from "@/components/error-state";
-import { EmptyState } from "@/components/empty-state";
+import { AlarmClock, CalendarClock, Check, ExternalLink } from "lucide-react";
+import type { AcademicEvent } from "@/lib/types";
+import { useAcademicCenter } from "@/hooks/use-academic-center";
+import { isCurrentAcademicEvent } from "@/lib/event-visibility";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function todayIso(): string {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  month: "numeric",
+  day: "numeric",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function eventMoment(event: AcademicEvent): string | undefined {
+  return event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn;
+}
+
+function eventTimeLabel(event: AcademicEvent): string {
+  const value = eventMoment(event);
+  if (!value) return "未提供截止时间";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", weekday: "short" })
+      .format(new Date(`${value}T12:00:00+08:00`));
+  }
+  return dateTimeFormatter.format(new Date(value));
 }
 
 export default function TodosPage() {
-  const { data, loading, error } = useApi(() => api.getExams(), []);
+  const { cache, loadingCache, setEventState } = useAcademicCenter();
+  if (loadingCache && !cache) return <TodosSkeleton />;
 
-  if (loading) return <TodosSkeleton />;
-  if (error) return <ErrorState message={error.message} />;
-
-  const exams = (data ?? [])
-    .filter((exam) => exam.date >= todayIso())
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const soonExams = exams.filter((exam) => ["今天", "明天"].includes(examCountdown(exam.date).text));
-  const locatedExams = exams.filter((exam) => Boolean(exam.location));
+  const now = Date.now();
+  const currentSemesterId = cache?.payload.currentSemester?.id;
+  const tasks = (cache?.payload.events ?? [])
+    .filter((event) => (event.kind === "assignment" || event.kind === "exam")
+      && isCurrentAcademicEvent(event, cache?.states[event.id], currentSemesterId, now))
+    .sort((a, b) => (eventMoment(a) ?? "9999").localeCompare(eventMoment(b) ?? "9999"));
+  const assignments = tasks.filter((event) => event.kind === "assignment").length;
+  const exams = tasks.length - assignments;
+  const urgent = tasks.filter((event) => {
+    const value = eventMoment(event);
+    if (!value) return false;
+    const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T23:59:59+08:00` : value);
+    return timestamp >= now && timestamp - now <= 86_400_000;
+  }).length;
 
   return (
-    <div>
-      <PageHeader title="考试待办" description="学校已经发布的考试安排" />
-
-      <div className="stagger-enter grid gap-4 sm:grid-cols-3">
-        <SummaryCard icon={CalendarClock} label="今明两天" value={soonExams.length} tone="warning" />
-        <SummaryCard icon={CheckCircle2} label="地点已公布" value={locatedExams.length} tone="primary" />
-        <SummaryCard icon={CalendarClock} label="全部待考" value={exams.length} tone="primary" />
-      </div>
-
-      {exams.length === 0 ? (
-        <Card className="mt-5"><CardContent className="pt-6"><EmptyState title="暂时没有待办" description="有新安排时会显示在这里" /></CardContent></Card>
-      ) : (
-        <div className="mt-5">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">待考安排</CardTitle>
-              <Button asChild variant="ghost" size="sm"><Link href="/exams">全部考试 <ArrowUpRight /></Link></Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {exams.map((exam) => <ExamTodo key={exam.id} exam={exam} />)}
-            </CardContent>
-          </Card>
+    <div className="mx-auto max-w-4xl pb-16">
+      <div className="mb-7">
+        <h1 className="text-2xl font-semibold tracking-tight">待办</h1>
+        <p className="mt-1 text-sm text-muted-foreground">需要完成的作业与即将到来的考试。</p>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+          <span><strong className="mr-1 text-foreground">{assignments}</strong>项作业</span>
+          <span><strong className="mr-1 text-foreground">{exams}</strong>场考试</span>
+          {urgent > 0 && <span className="text-amber-600 dark:text-amber-400"><strong className="mr-1">{urgent}</strong>项在 24 小时内</span>}
         </div>
-      )}
-    </div>
-  );
-}
-
-function SummaryCard({ icon: Icon, label, value, tone }: { icon: typeof CalendarClock; label: string; value: number; tone: "warning" | "primary" }) {
-  return (
-    <Card className="overflow-hidden"><CardContent className="flex items-center justify-between p-5">
-      <div><div className="text-2xl font-semibold tracking-tight">{value}</div><div className="mt-1 text-sm text-muted-foreground">{label}</div></div>
-      <span className={tone === "warning" ? "rounded-xl bg-amber-500/10 p-2.5 text-amber-600 dark:text-amber-400" : "rounded-xl bg-primary/10 p-2.5 text-primary"}><Icon className="h-5 w-5" /></span>
-    </CardContent></Card>
-  );
-}
-
-function ExamTodo({ exam }: { exam: Exam }) {
-  const countdown = examCountdown(exam.date);
-  return (
-    <div className="rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0"><div className="truncate font-medium">{exam.courseName}</div><div className="mt-1 text-xs text-muted-foreground">{fullDateCN(exam.date)}{exam.startTime ? ` · ${exam.startTime}` : ""}</div></div>
-        <Badge variant={isOfficialSpecialExam(exam) ? "warning" : "secondary"}>{exam.category || countdown.text}</Badge>
       </div>
-      <div className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{exam.location || "地点待定"}</div>
+
+      {tasks.length ? <div>{tasks.map((event) => {
+        const sourceUrl = event.sources.find((source) => source.url)?.url;
+        const Icon = event.kind === "assignment" ? AlarmClock : CalendarClock;
+        return (
+          <div key={event.id} className="group flex items-start gap-3 border-b border-border/60 py-4 last:border-0">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Icon className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{event.kind === "assignment" ? "作业" : event.contextLabel === "线上考试" ? "线上考试" : "考试"}</Badge></div>
+              <p className="mt-1 text-xs text-muted-foreground">{[eventTimeLabel(event), event.courseName, event.location, event.status].filter(Boolean).join(" · ")}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {sourceUrl && <Button asChild size="icon" variant="ghost" className="h-8 w-8"><a href={sourceUrl} target="_blank" rel="noreferrer" aria-label="打开原页面"><ExternalLink className="h-3.5 w-3.5" /></a></Button>}
+              <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="完成" onClick={() => setEventState(event.id, { done: true, read: true })}><Check className="h-3.5 w-3.5" /></Button>
+            </div>
+          </div>
+        );
+      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Check className="h-6 w-6 text-emerald-500" /><p className="mt-3 text-sm">目前没有需要处理的作业或考试</p></div>}
     </div>
   );
 }
 
 function TodosSkeleton() {
-  return <div className="space-y-5"><Skeleton className="h-10 w-48" /><div className="grid gap-4 sm:grid-cols-3"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div><Skeleton className="h-80" /></div>;
+  return <div className="mx-auto max-w-4xl space-y-4"><Skeleton className="h-8 w-28" /><Skeleton className="h-4 w-72" />{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)}</div>;
 }
