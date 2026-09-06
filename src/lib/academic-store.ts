@@ -129,7 +129,7 @@ function normalizeCachedAcademicTime(event: AcademicEvent): AcademicEvent {
     return { ...normalized, priority: scoreAcademicEvent(normalized) };
   }
   if (event.kind === "class") {
-    const date = source.sourceId.split("|")[1] ?? "";
+    const date = source.sourceId.split("|").find((part) => /^\d{4}-\d{2}-\d{2}$/.test(part)) ?? "";
     const session = raw.session && typeof raw.session === "object" ? raw.session as Record<string, unknown> : {};
     const startTime = typeof session.startTime === "string" ? session.startTime : "";
     const endTime = typeof session.endTime === "string" ? session.endTime : "";
