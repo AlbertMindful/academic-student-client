@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { isCurrentAcademicEvent, isHistoricalAcademicEvent } from "@/lib/event-visibility";
 
 const labels: Record<AcademicEvent["kind"], string> = {
   class: "课程",
@@ -23,32 +24,26 @@ const formatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "num
 
 export default function ActivityPage() {
   const { cache, loadingCache, setEventState } = useAcademicCenter();
-  const [filter, setFilter] = React.useState<"active" | "done" | "ignored" | "all">("active");
+  const [filter, setFilter] = React.useState<"current" | "done" | "ignored" | "history">("current");
   if (loadingCache && !cache) return <div className="space-y-3"><Skeleton className="h-8 w-40" />{Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-16" />)}</div>;
 
   const now = Date.now();
   const events = [...(cache?.payload.events ?? [])].filter((event) => {
     const state = cache?.states[event.id];
-    if (filter === "active") {
-      if (state?.done || state?.ignored) return false;
-      const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn ?? event.publishedAt;
-      const days = anchor ? (new Date(anchor).getTime() - now) / 86_400_000 : null;
-      if (event.kind === "class") return days != null && days >= -0.2 && days <= 7;
-      if (event.kind === "exam") return days == null || days >= -0.2;
-      return !state?.read || state?.pinned;
-    }
+    const currentSemesterId = cache?.payload.currentSemester?.id;
+    if (filter === "current") return isCurrentAcademicEvent(event, state, currentSemesterId, now);
     if (filter === "done") return state?.done;
     if (filter === "ignored") return state?.ignored;
-    return true;
-  }).sort((a, b) => filter === "active"
+    return isHistoricalAcademicEvent(event, state, currentSemesterId, now);
+  }).sort((a, b) => filter === "current"
     ? (a.dueAt ?? a.startsAt ?? a.dueOn ?? a.startsOn ?? a.updatedAt).localeCompare(b.dueAt ?? b.startsAt ?? b.dueOn ?? b.startsOn ?? b.updatedAt)
     : (b.startsAt ?? b.publishedAt ?? b.updatedAt).localeCompare(a.startsAt ?? a.publishedAt ?? a.updatedAt));
 
   return (
     <div className="mx-auto max-w-4xl pb-16">
-      <div className="mb-7"><h1 className="text-2xl font-semibold tracking-tight">所有动态</h1><p className="mt-1 text-sm text-muted-foreground">课程、考试、成绩与通知汇集在同一条时间线。</p></div>
+      <div className="mb-7"><h1 className="text-2xl font-semibold tracking-tight">所有动态</h1><p className="mt-1 text-sm text-muted-foreground">默认只显示仍值得关注的内容，较早的信息会自动移入历史。</p></div>
       <div className="mb-5 flex gap-1 border-b pb-3">
-        {(["active", "done", "ignored", "all"] as const).map((value) => <Button key={value} size="sm" variant={filter === value ? "secondary" : "ghost"} onClick={() => setFilter(value)}>{value === "active" ? "进行中" : value === "done" ? "已完成" : value === "ignored" ? "已忽略" : "全部"}</Button>)}
+        {(["current", "done", "ignored", "history"] as const).map((value) => <Button key={value} size="sm" variant={filter === value ? "secondary" : "ghost"} onClick={() => setFilter(value)}>{value === "current" ? "当前" : value === "done" ? "已完成" : value === "ignored" ? "已忽略" : "历史"}</Button>)}
       </div>
       {events.length ? <div>{events.map((event) => {
         const state = cache?.states[event.id];
