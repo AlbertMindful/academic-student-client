@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlarmClock, BookOpen, CalendarClock, Check, ChevronRight, CircleAlert, ExternalLink, EyeOff, FileText, Mail, MoreHorizontal, Pin, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
 import type { AcademicEvent, AcademicEventState, ProviderHealth } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
+import { isCurrentAcademicEvent } from "@/lib/event-visibility";
 import { useSession } from "@/hooks/use-session";
 import { useAcademicCenter } from "@/hooks/use-academic-center";
 import { cn } from "@/lib/utils";
@@ -120,14 +121,15 @@ export default function DashboardPage() {
   const today = localDateKey(now);
 
   const visible = (cache?.payload.events ?? []).filter((event) => !cache?.states[event.id]?.ignored && !cache?.states[event.id]?.done).map((event) => ({ ...event, priority: scoreAcademicEvent(event, now) })).sort((a, b) => Number(Boolean(cache?.states[b.id]?.pinned)) - Number(Boolean(cache?.states[a.id]?.pinned)) || b.priority - a.priority || (eventAnchor(a) ?? "").localeCompare(eventAnchor(b) ?? ""));
-  const todayEvents = visible.filter((event) => event.startsAt && localDateKey(event.startsAt) === today && event.kind === "class").sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
-  const attention = visible.filter((event) => {
+  const currentVisible = visible.filter((event) => isCurrentAcademicEvent(event, cache?.states[event.id], cache?.payload.currentSemester?.id, now.getTime()));
+  const todayEvents = currentVisible.filter((event) => event.startsAt && localDateKey(event.startsAt) === today && event.kind === "class").sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
+  const attention = currentVisible.filter((event) => {
     if (event.kind === "class") return false;
     const anchor = eventAnchor(event);
     const days = anchor ? (new Date(anchor).getTime() - now.getTime()) / 86_400_000 : null;
     return cache?.states[event.id]?.pinned || event.kind === "schedule_change" || (days != null && days >= -0.2 && days <= 7) || !cache?.states[event.id]?.read;
   }).slice(0, 8);
-  const future = visible.filter((event) => event.kind !== "class" && !attention.some((item) => item.id === event.id) && Boolean(eventAnchor(event))).sort((a, b) => (eventAnchor(a) ?? "").localeCompare(eventAnchor(b) ?? "")).slice(0, 7);
+  const future = currentVisible.filter((event) => event.kind !== "class" && !attention.some((item) => item.id === event.id) && Boolean(eventAnchor(event))).sort((a, b) => (eventAnchor(a) ?? "").localeCompare(eventAnchor(b) ?? "")).slice(0, 7);
 
   if (loadingCache && !cache) return <DashboardLoading />;
   if (!cache) return <div className="mx-auto max-w-xl py-24 text-center"><WifiOff className="mx-auto h-6 w-6 text-muted-foreground" /><h1 className="mt-4 text-lg font-semibold">暂时无法取得学业信息</h1><p className="mt-2 text-sm text-muted-foreground">{error?.message ?? "请检查网络后重试。"}</p><Button className="mt-5" onClick={() => void sync()}>重新尝试</Button></div>;
