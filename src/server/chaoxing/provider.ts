@@ -9,6 +9,14 @@ const HOME_URL = "https://i.chaoxing.com/base";
 
 export class ChaoxingReauthError extends Error {}
 
+function isChaoxingLoginPage(url: string, body: string): boolean {
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch { /* invalid final URL */ }
+  if (host === "passport2.chaoxing.com" || host.endsWith(".passport2.chaoxing.com")) return true;
+  return /<title>\s*用户登录\s*<\/title>/i.test(body)
+    || (/(?:id=["']loginBtn["']|loginByPhoneAndPwd)/i.test(body) && /id=["'](?:phone|pwd)["']/i.test(body));
+}
+
 interface ChaoxingCourse {
   courseId: string;
   clazzId: string;
@@ -294,7 +302,7 @@ async function fetchCourseEvents(client: SchoolHttpClient, course: ChaoxingCours
   const fetchOne = async (kind: keyof typeof urls) => {
     try {
       const page = await client.get(urls[kind], { headers: { Referer: "https://i.chaoxing.com/" } });
-      if (/请重新登录|用户登录|passport2\.chaoxing/.test(page.body)) throw new ChaoxingReauthError();
+      if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
       return kind === "activity"
         ? parseActivityPage(page.body, course, urls[kind], fetchedAt)
         : kind === "work"
@@ -333,14 +341,14 @@ async function fetchInbox(
 ): Promise<{ events: AcademicEvent[]; warning?: string }> {
   try {
     const home = await client.get(HOME_URL);
-    if (/请重新登录|用户登录|passport2\.chaoxing/.test(home.body)) throw new ChaoxingReauthError();
+    if (isChaoxingLoginPage(home.url, home.body) || /请重新登录/.test(home.body)) throw new ChaoxingReauthError();
     const $ = cheerio.load(home.body);
     const rawUrl = $("[name='收件箱'][dataurl], [dataurl*='/pc/notice/myNotice']").first().attr("dataurl")
       ?? "https://notice.chaoxing.com/pc/notice/myNotice";
     const inboxUrl = safeChaoxingUrl(rawUrl, HOME_URL);
     if (!inboxUrl) return { events: [], warning: "收件箱暂时无法更新" };
     const page = await client.get(inboxUrl, { headers: { Referer: HOME_URL } });
-    if (/请重新登录|用户登录|passport2\.chaoxing/.test(page.body)) throw new ChaoxingReauthError();
+    if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
     return { events: parseInboxPage(page.body, inboxUrl, officialCourseNames, fetchedAt) };
   } catch (cause) {
     if (cause instanceof ChaoxingReauthError) throw cause;
@@ -386,16 +394,20 @@ export async function getChaoxingAcademicData(
   officialCourseNames: string[] = [],
 ): Promise<ChaoxingAcademicData> {
   const response = await client.get(COURSE_API, { headers: { Referer: HOME_URL } });
+  if (isChaoxingLoginPage(response.url, response.body)) {
+    throw new ChaoxingReauthError("学习通登录已过期");
+  }
   let payload: unknown;
   try {
     payload = JSON.parse(response.body);
   } catch {
-    throw new ChaoxingReauthError("学习通会话无效");
+    throw new Error("学习通课程数据暂时无法读取");
   }
   const root = payload as { result?: number | boolean; status?: boolean; msg?: string };
-  if (root.result === 0 || root.status === false || /重新登录/.test(root.msg ?? "")) {
+  if (/重新登录|登录已过期|请先登录/.test(root.msg ?? "")) {
     throw new ChaoxingReauthError("学习通登录已过期");
   }
+  if (root.result === 0 || root.status === false) throw new Error("学习通课程数据暂时无法读取");
   const discoveredCourses = findCourses(payload);
   // Without a current official course list we cannot reliably distinguish this
   // semester's courses from historical/public courses. Cached trusted events stay
