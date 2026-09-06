@@ -7,6 +7,8 @@ import type { SchoolHttpClient } from "@/server/http";
 
 const COURSE_API = "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?rss=1&view=json";
 const HOME_URL = "https://i.chaoxing.com/base";
+const ALL_WORK_URL = "https://mooc1-api.chaoxing.com/work/stu-work";
+const ALL_EXAM_URL = "https://mooc1-api.chaoxing.com/exam-ans/exam/phone/examcode";
 
 export class ChaoxingReauthError extends Error {}
 
@@ -125,6 +127,17 @@ function parseCalendarDate(text: string, now = new Date()): { at?: string; on?: 
   if (!match[4]) return { on: date };
   const local = chinaDateTime(date, match[4]);
   return Number.isNaN(local.getTime()) ? { on: date } : { at: local.toISOString() };
+}
+
+function parseTaskDeadline(text: string, now: Date): { at?: string; on?: string } {
+  const calendar = parseCalendarDate(text, now);
+  if (calendar.at || calendar.on) return calendar;
+  const relative = text.match(/(?:剩余|还有)\s*(?:(\d+)\s*天)?\s*(?:(\d+)\s*(?:小时|时))?\s*(?:(\d+)\s*分(?:钟)?)?/);
+  if (!relative || !relative.slice(1).some(Boolean)) return {};
+  const milliseconds = Number(relative[1] ?? 0) * 86_400_000
+    + Number(relative[2] ?? 0) * 3_600_000
+    + Number(relative[3] ?? 0) * 60_000;
+  return milliseconds > 0 ? { at: new Date(now.getTime() + milliseconds).toISOString() } : {};
 }
 
 function classifyTitle(title: string): AcademicEventKind {
@@ -317,36 +330,63 @@ async function hydrateInboxDetails(
   });
 }
 
-function parseWorkPage(html: string, course: ChaoxingCourse, pageUrl: string, fetchedAt: string): AcademicEvent[] {
+function courseForTask(
+  label: string,
+  rawUrl: string,
+  courses: ChaoxingCourse[],
+  officialCourseNames: string[],
+): string | undefined {
+  const normalized = cleanText(label).replace(/^(?:课程|来自课程)\s*[:：]?\s*/, "");
+  const byName = normalized
+    ? officialCourseNames.find((name) => courseMatches(normalized, name))
+    : undefined;
+  if (byName) return byName;
+  try {
+    const url = new URL(rawUrl, ALL_WORK_URL);
+    const courseId = url.searchParams.get("courseId") ?? url.searchParams.get("courseid");
+    const matched = courses.find((course) => course.courseId === courseId);
+    if (matched) return officialCourseNames.find((name) => courseMatches(matched.name, name));
+  } catch { /* malformed task URL */ }
+  return undefined;
+}
+
+function parseGlobalWorkPage(
+  html: string,
+  courses: ChaoxingCourse[],
+  officialCourseNames: string[],
+  fetchedAt: string,
+): AcademicEvent[] {
   const $ = cheerio.load(html);
-  const events: AcademicEvent[] = [];
   const now = new Date(fetchedAt);
-  $(".workList li, .work-list li, .work-list-item, .workList-item, .task-list li, .workList_tr, tr").each((_, node) => {
+  const events: AcademicEvent[] = [];
+  $("ul.nav > li").each((_, node) => {
     const item = $(node);
-    const text = cleanText(item.text());
-    const link = item.find("a[href]").first();
-    const title = cleanText(link.attr("title") || item.find(".overHidden2,.work-name,.title,h3,h4").first().text() || link.text());
-    if (!title || title.length > 160 || !/作业|任务|测验|考试/.test(`${title} ${text}`)) return;
-    if (/已交|待批阅|已完成|已结束|已截止/.test(text) && !/未完成|未交|进行中/.test(text)) return;
-    const parsed = parseCalendarDate(text, now);
-    const parsedTime = parsed.at ? Date.parse(parsed.at) : parsed.on ? Date.parse(`${parsed.on}T23:59:59+08:00`) : null;
-    if (parsedTime != null && parsedTime < now.getTime() - 3 * 60 * 60_000) return;
-    const href = safeChaoxingUrl(link.attr("href") ?? "", pageUrl) ?? pageUrl;
-    const sourceId = href === pageUrl ? `${course.clazzId}:${title}` : href;
-    const kind = /考试|测验/.test(title) ? "exam" : "assignment";
+    const option = item.find("div[role='option']").first();
+    if (!option.length) return;
+    const title = cleanText(option.find("p").first().text());
+    const statusElement = option.find("span").eq(0);
+    const status = cleanText(statusElement.text());
+    const courseLabel = cleanText(option.find("span").eq(1).text());
+    const remaining = cleanText(option.find(".fr").first().text());
+    const rawUrl = item.attr("data") ?? option.attr("data") ?? option.find("a[href]").first().attr("href") ?? "";
+    const courseName = courseForTask(courseLabel, rawUrl, courses, officialCourseNames);
+    if (!title || !courseName) return;
+    const explicitlyPending = statusElement.hasClass("status") || /未交|未完成|待提交|进行中/.test(status);
+    if (!explicitlyPending && /已交|已完成|待批阅|已截止|已结束/.test(status)) return;
+    const deadline = parseTaskDeadline(`${remaining} ${option.text()}`, now);
+    const url = safeChaoxingUrl(rawUrl, ALL_WORK_URL) ?? ALL_WORK_URL;
+    const sourceId = rawUrl || `${courseName}:${title}`;
     events.push(makeEvent({
-      id: `${kind}_${stableHash(sourceId)}`,
-      kind,
+      id: `assignment_${stableHash(`global-work:${sourceId}`)}`,
+      kind: "assignment",
       title,
-      summary: [course.name, kind === "exam" ? "线上测验" : "未完成"].join(" · "),
-      courseName: course.name,
-      dueAt: /截止|结束/.test(text) ? parsed.at : undefined,
-      dueOn: /截止|结束/.test(text) ? parsed.on : undefined,
-      startsAt: !/截止|结束/.test(text) ? parsed.at : undefined,
-      startsOn: !/截止|结束/.test(text) ? parsed.on : undefined,
-      status: "未完成",
-      contextLabel: kind === "exam" ? "线上测验" : "课程作业",
-      sources: [{ provider: "chaoxing", providerLabel: "学习通", sourceId, url: href, raw: { channel: "work" } }],
+      summary: [courseName, status || "未完成", remaining].filter(Boolean).join(" · "),
+      courseName,
+      dueAt: deadline.at,
+      dueOn: deadline.on,
+      status: status || "未完成",
+      contextLabel: "课程作业",
+      sources: [{ provider: "chaoxing", providerLabel: "学习通", sourceId: `work:${sourceId}`, url, raw: { channel: "work", status, remaining } }],
       firstSeenAt: fetchedAt,
       updatedAt: fetchedAt,
     }, now));
@@ -354,41 +394,74 @@ function parseWorkPage(html: string, course: ChaoxingCourse, pageUrl: string, fe
   return events;
 }
 
-function parseExamPage(html: string, course: ChaoxingCourse, pageUrl: string, fetchedAt: string): AcademicEvent[] {
+function parseGlobalExamPage(
+  html: string,
+  courses: ChaoxingCourse[],
+  officialCourseNames: string[],
+  fetchedAt: string,
+): AcademicEvent[] {
   const $ = cheerio.load(html);
-  const events: AcademicEvent[] = [];
   const now = new Date(fetchedAt);
-  $(".exam-list li, .examList li, .exam-list-item, .ks_list li, tr").each((_, node) => {
+  const events: AcademicEvent[] = [];
+  $("ul.ks_list > li").each((_, node) => {
     const item = $(node);
-    const text = cleanText(item.text());
-    const link = item.find("a[href]").first();
-    const title = cleanText(link.attr("title") || item.find(".examName,.exam-name,.overHidden2,.title,h3,h4").first().text() || link.text());
-    if (!title || title.length > 160 || !/考试|测验/.test(`${title} ${text}`)) return;
-    if (/已完成|已交卷|已结束|已过期/.test(text) && !/未完成|进行中/.test(text)) return;
-    const parsed = parseCalendarDate(text, now);
-    const parsedTime = parsed.at ? Date.parse(parsed.at) : parsed.on ? Date.parse(`${parsed.on}T23:59:59+08:00`) : null;
-    if (parsedTime != null && parsedTime < now.getTime() - 3 * 60 * 60_000) return;
-    const deadline = /截止|结束/.test(text);
-    const href = safeChaoxingUrl(link.attr("href") ?? "", pageUrl) ?? pageUrl;
-    const sourceId = href === pageUrl ? `${course.clazzId}:exam:${title}` : href;
+    const title = cleanText(item.find("dl dt").first().text());
+    const timing = cleanText(item.find("dl dd").first().text());
+    const status = cleanText(item.find(".ks_state").first().text());
+    const rawUrl = item.attr("data") ?? item.find("a[href]").first().attr("href") ?? "";
+    const expired = /ks_02/.test(item.find(".ks_pic img").first().attr("src") ?? "") || /已结束|已过期/.test(status);
+    const finished = /已完成|待批阅|已交卷/.test(status);
+    const courseName = courseForTask("", rawUrl, courses, officialCourseNames)
+      ?? officialCourseNames.find((name) => title.includes(name));
+    if (!title || !courseName || expired || finished) return;
+    const deadline = parseTaskDeadline(`${timing} ${item.text()}`, now);
+    const url = safeChaoxingUrl(rawUrl, ALL_EXAM_URL) ?? ALL_EXAM_URL;
+    const sourceId = rawUrl || `${courseName}:${title}`;
     events.push(makeEvent({
-      id: `exam_${stableHash(sourceId)}`,
+      id: `exam_${stableHash(`global-exam:${sourceId}`)}`,
       kind: "exam",
       title,
-      summary: `${course.name} · 线上考试`,
-      courseName: course.name,
-      dueAt: deadline ? parsed.at : undefined,
-      dueOn: deadline ? parsed.on : undefined,
-      startsAt: deadline ? undefined : parsed.at,
-      startsOn: deadline ? undefined : parsed.on,
-      status: "线上考试",
+      summary: [courseName, status || "待完成", timing].filter(Boolean).join(" · "),
+      courseName,
+      dueAt: deadline.at,
+      dueOn: deadline.on,
+      status: status || "待完成",
       contextLabel: "线上考试",
-      sources: [{ provider: "chaoxing", providerLabel: "学习通", sourceId, url: href, raw: { channel: "exam" } }],
+      sources: [{ provider: "chaoxing", providerLabel: "学习通", sourceId: `exam:${sourceId}`, url, raw: { channel: "exam", status, timing } }],
       firstSeenAt: fetchedAt,
       updatedAt: fetchedAt,
     }, now));
   });
   return events;
+}
+
+async function fetchGlobalTasks(
+  client: SchoolHttpClient,
+  courses: ChaoxingCourse[],
+  officialCourseNames: string[],
+  fetchedAt: string,
+): Promise<{ events: AcademicEvent[]; warnings: string[] }> {
+  const fetchOne = async (kind: "work" | "exam") => {
+    const url = kind === "work" ? ALL_WORK_URL : ALL_EXAM_URL;
+    try {
+      const page = await client.get(url, { headers: { Referer: HOME_URL } });
+      if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
+      return kind === "work"
+        ? parseGlobalWorkPage(page.body, courses, officialCourseNames, fetchedAt)
+        : parseGlobalExamPage(page.body, courses, officialCourseNames, fetchedAt);
+    } catch (cause) {
+      if (cause instanceof ChaoxingReauthError) throw cause;
+      return null;
+    }
+  };
+  const [work, exams] = await Promise.all([fetchOne("work"), fetchOne("exam")]);
+  return {
+    events: [...(work ?? []), ...(exams ?? [])],
+    warnings: [
+      ...(work === null ? ["作业暂时无法更新"] : []),
+      ...(exams === null ? ["线上考试暂时无法更新"] : []),
+    ],
+  };
 }
 
 function parseActivityPage(html: string, course: ChaoxingCourse, pageUrl: string, fetchedAt: string): AcademicEvent[] {
@@ -432,32 +505,23 @@ function courseQuery(course: ChaoxingCourse): URLSearchParams {
 
 async function fetchCourseEvents(client: SchoolHttpClient, course: ChaoxingCourse, fetchedAt: string) {
   const query = courseQuery(course);
-  const workQuery = new URLSearchParams({ courseId: course.courseId, clazzId: course.clazzId, ut: "s" });
-  if (course.cpi) workQuery.set("cpi", course.cpi);
   const urls = {
     activity: `https://mobilelearn.chaoxing.com/page/active/stuActiveList?${query}`,
-    work: `https://mooc1-api.chaoxing.com/work/stu-work?${workQuery}`,
-    exam: `https://mooc1.chaoxing.com/exam-ans/mooc2/exam/exam-list?${query}`,
   };
   const fetchOne = async (kind: keyof typeof urls) => {
     try {
       const page = await client.get(urls[kind], { headers: { Referer: "https://i.chaoxing.com/" } });
       if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
-      return kind === "activity"
-        ? parseActivityPage(page.body, course, urls[kind], fetchedAt)
-        : kind === "work"
-          ? parseWorkPage(page.body, course, urls[kind], fetchedAt)
-          : parseExamPage(page.body, course, urls[kind], fetchedAt);
+      return parseActivityPage(page.body, course, urls[kind], fetchedAt);
     } catch (cause) {
       if (cause instanceof ChaoxingReauthError) throw cause;
       return null;
     }
   };
-  const [activities, work, exams] = await Promise.all([fetchOne("activity"), fetchOne("work"), fetchOne("exam")]);
-  const failed = [activities, work, exams].filter((value) => value === null).length;
+  const activities = await fetchOne("activity");
   return {
-    events: [...(activities ?? []), ...(work ?? []), ...(exams ?? [])],
-    warning: failed === 3 ? `${course.name}暂时无法更新` : undefined,
+    events: activities ?? [],
+    warning: activities === null ? `${course.name}暂时无法更新` : undefined,
   };
 }
 
@@ -571,12 +635,14 @@ export async function getChaoxingAcademicData(
     ? discoveredCourses.filter((course) => officialCourseNames.some((official) => courseMatches(course.name, official)))
     : [];
 
-  const [inbox, courseResults] = await Promise.all([
+  const [inbox, globalTasks, courseResults] = await Promise.all([
     fetchInbox(client, officialCourseNames, fetchedAt),
+    fetchGlobalTasks(client, discoveredCourses, officialCourseNames, fetchedAt),
     mapWithConcurrency(courses, 3, (course) => fetchCourseEvents(client, course, fetchedAt)),
   ]);
   const rawEvents = [
     ...inbox.events,
+    ...globalTasks.events,
     ...courseResults.flatMap((result) => result.events),
   ];
   const events = deduplicateChaoxingEvents(rawEvents);
@@ -585,6 +651,7 @@ export async function getChaoxingAcademicData(
     events,
     warnings: [
       ...(inbox.warning ? [inbox.warning] : []),
+      ...globalTasks.warnings,
       ...courseResults.flatMap((result) => result.warning ? [result.warning] : []),
     ],
     counts: {
