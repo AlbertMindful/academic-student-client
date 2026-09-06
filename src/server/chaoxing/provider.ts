@@ -124,6 +124,61 @@ function makeEvent(input: Omit<AcademicEvent, "priority">, now = new Date()): Ac
   return event;
 }
 
+interface InboxFields {
+  sourceId: string;
+  title: string;
+  publishedText?: string;
+  sender?: string;
+  unread?: boolean;
+  url?: string;
+}
+
+function inboxEventFromFields(
+  fields: InboxFields,
+  pageUrl: string,
+  officialCourseNames: string[],
+  fetchedAt: string,
+): AcademicEvent | null {
+  const now = new Date(fetchedAt);
+  const title = cleanText(fields.title);
+  if (!title || /评价任务|评学问卷|满意度调查/.test(title)) return null;
+  const published = parseCalendarDate(cleanText(fields.publishedText ?? ""), now);
+  const publishedAt = published.at ?? (published.on ? new Date(`${published.on}T12:00:00`).toISOString() : undefined);
+  const ageDays = publishedAt ? (now.getTime() - new Date(publishedAt).getTime()) / 86_400_000 : 0;
+  const highSignal = /考试|测验|作业|提交|截止|调课|停课|教室|资料|课件|成绩/.test(title);
+  if (ageDays > 45 || (ageDays > 14 && !highSignal)) return null;
+
+  const extractedCourse = courseFromTitle(title);
+  const officialCourse = extractedCourse
+    ? officialCourseNames.find((name) => courseMatches(extractedCourse, name))
+    : undefined;
+  if (extractedCourse && officialCourseNames.length && !officialCourse) return null;
+
+  const sender = cleanText(fields.sender ?? "") || undefined;
+  const kind = classifyTitle(title);
+  const eventTitle = kind === "notice" || kind === "material" ? title : title.replace(/^作业[:：]\s*/, "");
+  return makeEvent({
+    id: `${kind}_${stableHash(`inbox:${fields.sourceId}`)}`,
+    kind,
+    title: eventTitle,
+    summary: [officialCourse, sender ? `来自 ${sender}` : "", "收件箱"].filter(Boolean).join(" · "),
+    courseName: officialCourse,
+    publishedAt,
+    sender,
+    sourceUnread: fields.unread,
+    contextLabel: "收件箱",
+    sources: [{
+      provider: "chaoxing",
+      providerLabel: "学习通",
+      sourceId: `inbox:${fields.sourceId}`,
+      url: safeChaoxingUrl(fields.url ?? "", pageUrl) ?? HOME_URL,
+      raw: { sender, publishedAt, channel: "inbox" },
+    }],
+    firstSeenAt: fetchedAt,
+    updatedAt: publishedAt ?? fetchedAt,
+  }, now);
+}
+
 function parseInboxPage(
   html: string,
   pageUrl: string,
@@ -131,49 +186,52 @@ function parseInboxPage(
   fetchedAt: string,
 ): AcademicEvent[] {
   const $ = cheerio.load(html);
-  const now = new Date(fetchedAt);
   const events: AcademicEvent[] = [];
   $("li.dataBody_item").slice(0, 40).each((_, node) => {
     const item = $(node);
     const title = cleanText(item.find(".notice_title").first().text());
-    if (!title || /评价任务|评学问卷|满意度调查/.test(title)) return;
-    const published = parseCalendarDate(cleanText(item.find(".notice_time").first().text()), now);
-    const publishedAt = published.at ?? (published.on ? new Date(`${published.on}T12:00:00`).toISOString() : undefined);
-    const ageDays = publishedAt ? (now.getTime() - new Date(publishedAt).getTime()) / 86_400_000 : 0;
-    const highSignal = /考试|测验|作业|提交|截止|调课|停课|教室|资料|课件|成绩/.test(title);
-    if (ageDays > 45 || (ageDays > 14 && !highSignal)) return;
-
-    const extractedCourse = courseFromTitle(title);
-    const officialCourse = extractedCourse
-      ? officialCourseNames.find((name) => courseMatches(extractedCourse, name))
-      : undefined;
-    if (extractedCourse && officialCourseNames.length && !officialCourse) return;
-
-    const sender = cleanText(item.find(".receiverName").first().text()) || undefined;
-    const sourceId = item.attr("data-id") ?? item.find(".dataBody_check").attr("data-id") ?? item.attr("id") ?? `${title}:${publishedAt ?? ""}`;
-    const kind = classifyTitle(title);
-    const eventTitle = kind === "notice" || kind === "material" ? title : title.replace(/^作业[:：]\s*/, "");
-    events.push(makeEvent({
-      id: `${kind}_${stableHash(`inbox:${sourceId}`)}`,
-      kind,
-      title: eventTitle,
-      summary: [officialCourse, sender ? `来自 ${sender}` : "", "收件箱"].filter(Boolean).join(" · "),
-      courseName: officialCourse,
-      publishedAt,
-      sender,
-      sourceUnread: item.find(".notice_unread,.redDot").length > 0,
-      contextLabel: "收件箱",
-      sources: [{
-        provider: "chaoxing",
-        providerLabel: "学习通",
-        sourceId: `inbox:${sourceId}`,
-        url: HOME_URL,
-        raw: { sender, publishedAt, channel: "inbox" },
-      }],
-      firstSeenAt: fetchedAt,
-      updatedAt: publishedAt ?? fetchedAt,
-    }, now));
+    const event = inboxEventFromFields({
+      sourceId: item.attr("data-id") ?? item.find(".dataBody_check").attr("data-id") ?? item.attr("id") ?? title,
+      title,
+      publishedText: item.find(".notice_time").first().text(),
+      sender: item.find(".receiverName").first().text(),
+      unread: item.find(".redDot").filter((_, dot) => $(dot).css("opacity") !== "0").length > 0,
+      url: item.find(".openNotice").first().attr("data-url"),
+    }, pageUrl, officialCourseNames, fetchedAt);
+    if (event) events.push(event);
   });
+  return events;
+}
+
+function parseInboxApi(payload: unknown, pageUrl: string, officialCourseNames: string[], fetchedAt: string): AcademicEvent[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const notices = root.notices && typeof root.notices === "object" ? root.notices as Record<string, unknown> : {};
+  const records = [root.topNotices, root.urgentUnreadList, notices.list]
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object")
+    .slice(0, 40);
+  const events: AcademicEvent[] = [];
+  for (const item of records) {
+    const sourceId = stringValue(item.idCode ?? item.uuid ?? item.id);
+    const title = stringValue(item.title);
+    if (!sourceId || !title) continue;
+    const rawTime = item.insertTime;
+    const numericTime = typeof rawTime === "number" || /^\d{10,13}$/.test(stringValue(rawTime)) ? Number(rawTime) : null;
+    const publishedText = numericTime && Number.isFinite(numericTime)
+      ? new Date(numericTime < 1e12 ? numericTime * 1000 : numericTime).toISOString()
+      : stringValue(rawTime);
+    const detailPath = `/pc/notice/${stringValue(item.uuid ?? item.idCode)}/detail?sendTag=${encodeURIComponent(stringValue(item.sendTag))}`;
+    const event = inboxEventFromFields({
+      sourceId,
+      title,
+      publishedText,
+      sender: stringValue(item.createrName),
+      unread: Number(item.isread) === 0 && Number(item.redDot) === 0,
+      url: stringValue(item.sourceUrl) || detailPath,
+    }, pageUrl, officialCourseNames, fetchedAt);
+    if (event && !events.some((current) => current.id === event.id)) events.push(event);
+  }
   return events;
 }
 
@@ -349,7 +407,22 @@ async function fetchInbox(
     if (!inboxUrl) return { events: [], warning: "收件箱暂时无法更新" };
     const page = await client.get(inboxUrl, { headers: { Referer: HOME_URL } });
     if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
-    return { events: parseInboxPage(page.body, inboxUrl, officialCourseNames, fetchedAt) };
+    const renderedEvents = parseInboxPage(page.body, inboxUrl, officialCourseNames, fetchedAt);
+    if (renderedEvents.length) return { events: renderedEvents };
+
+    // The current inbox returns an HTML shell and fills its list through a
+    // read-only JSON request. A server-side fetch does not execute that script.
+    const apiUrl = new URL("/pc/notice/getNoticeList", inboxUrl).toString();
+    const result = await client.post(apiUrl, {
+      type: "", notice_type: "", lastValue: "", sort: "", folderUUID: "", kw: "",
+      startTime: "", endTime: "", gKw: "", gName: "", year: "", tag: "",
+      fidsCode: "", queryFolderNoticePrevYear: "0", filterSenderPuids: "", filterTags: "",
+    }, { headers: { Referer: inboxUrl, "X-Requested-With": "XMLHttpRequest" } });
+    if (isChaoxingLoginPage(result.url, result.body)) throw new ChaoxingReauthError();
+    let payload: unknown;
+    try { payload = JSON.parse(result.body); } catch { return { events: [], warning: "收件箱暂时无法更新" }; }
+    const events = parseInboxApi(payload, inboxUrl, officialCourseNames, fetchedAt);
+    return { events };
   } catch (cause) {
     if (cause instanceof ChaoxingReauthError) throw cause;
     return { events: [], warning: "收件箱暂时无法更新" };
