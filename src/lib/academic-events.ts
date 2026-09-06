@@ -9,20 +9,13 @@ import type {
 } from "@/lib/types";
 import { computeTeachingWeek } from "@/lib/teaching-week";
 import { isoDayOfWeek, sessionOnWeek } from "@/lib/schedule";
+import { chinaDateKey, chinaDateTime } from "@/lib/china-time";
 
 const DAY_MS = 86_400_000;
 
-function localIsoDate(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
 function atLocal(date: string, time?: string): string | undefined {
   if (!date || !time) return undefined;
-  const parsed = new Date(`${date}T${time}:00`);
+  const parsed = chinaDateTime(date, time);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
@@ -49,7 +42,7 @@ function source(
 }
 
 function minutesUntil(event: AcademicEvent, now: Date): number | null {
-  const anchor = event.dueAt ?? event.startsAt ?? (event.dueOn ? `${event.dueOn}T23:59:59` : event.startsOn ? `${event.startsOn}T12:00:00` : undefined);
+  const anchor = event.dueAt ?? event.startsAt ?? (event.dueOn ? `${event.dueOn}T23:59:59+08:00` : event.startsOn ? `${event.startsOn}T12:00:00+08:00` : undefined);
   if (!anchor) return null;
   const timestamp = new Date(anchor).getTime();
   if (!Number.isFinite(timestamp)) return null;
@@ -93,11 +86,11 @@ export function scheduleToEvents(
 ): AcademicEvent[] {
   if (!semester?.startDate) return [];
   const events: AcademicEvent[] = [];
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start = new Date(`${chinaDateKey(now)}T12:00:00Z`);
 
   for (let offset = 0; offset < days; offset += 1) {
     const date = new Date(start.getTime() + offset * DAY_MS);
-    const dateKey = localIsoDate(date);
+    const dateKey = date.toISOString().slice(0, 10);
     const weekday = isoDayOfWeek(date);
     const week = computeTeachingWeek(semester.startDate, date);
     for (const course of courses) {

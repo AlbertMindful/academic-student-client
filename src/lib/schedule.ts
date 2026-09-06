@@ -1,5 +1,6 @@
 import type { CourseSchedule, CourseSession, NextClass } from "@/lib/types";
 import { computeTeachingWeek, toHHmm } from "@/lib/teaching-week";
+import { chinaDateKey, chinaDateTime, chinaDayOfWeek } from "@/lib/china-time";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,10 +37,7 @@ export function isoDayOfWeek(date: Date): number {
 }
 
 function toDateTime(date: Date, hhmm: string): Date {
-  const [h, m] = hhmm.split(":").map(Number);
-  const d = new Date(date);
-  d.setHours(h, m, 0, 0);
-  return d;
+  return chinaDateTime(chinaDateKey(date), hhmm);
 }
 
 /**
@@ -57,7 +55,7 @@ export function findNextClass(
   for (let offset = 0; offset < 14; offset++) {
     const date = new Date(now.getTime() + offset * DAY_MS);
     const week = computeTeachingWeek(semesterStart, date);
-    const weekday = isoDayOfWeek(date);
+    const weekday = chinaDayOfWeek(date);
 
     for (const course of courses) {
       for (const session of course.sessions) {
@@ -103,7 +101,7 @@ export function todayClasses(
   now: Date,
 ): CourseSchedule[] {
   const week = computeTeachingWeek(semesterStart, now);
-  const weekday = isoDayOfWeek(now);
+  const weekday = chinaDayOfWeek(now);
   return courses
     .filter((c) =>
       c.sessions.some(

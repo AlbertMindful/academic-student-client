@@ -1,3 +1,5 @@
+import { chinaDateKey } from "@/lib/china-time";
+
 /**
  * Teaching-week calculation.
  *
@@ -29,7 +31,7 @@ export function parseDate(value: string): Date {
  */
 export function computeTeachingWeek(semesterStart: string, now: Date): number {
   const start = startOfWeek(parseDate(semesterStart));
-  const current = startOfWeek(now);
+  const current = startOfWeek(parseDate(chinaDateKey(now)));
   const diff = Math.floor((current.getTime() - start.getTime()) / (7 * DAY_MS));
   return Math.max(1, diff + 1);
 }
