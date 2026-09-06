@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
 import { courseMatches } from "@/lib/course-matching";
+import { chinaDateTime } from "@/lib/china-time";
 
 const DB_NAME = "academic-command-center";
 const DB_VERSION = 1;
@@ -111,6 +112,38 @@ function meaningfulSignature(event: AcademicEvent): string {
   });
 }
 
+function normalizeCachedAcademicTime(event: AcademicEvent): AcademicEvent {
+  const source = event.sources.find((item) => item.provider === "academic");
+  if (!source?.raw || typeof source.raw !== "object") return event;
+  const raw = source.raw as Record<string, unknown>;
+  if (event.kind === "exam") {
+    const date = typeof raw.date === "string" ? raw.date : "";
+    const startTime = typeof raw.startTime === "string" ? raw.startTime : "";
+    const endTime = typeof raw.endTime === "string" ? raw.endTime : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(startTime)) return event;
+    const normalized = {
+      ...event,
+      startsAt: chinaDateTime(date, startTime).toISOString(),
+      endsAt: /^\d{1,2}:\d{2}$/.test(endTime) ? chinaDateTime(date, endTime).toISOString() : event.endsAt,
+    };
+    return { ...normalized, priority: scoreAcademicEvent(normalized) };
+  }
+  if (event.kind === "class") {
+    const date = source.sourceId.split("|")[1] ?? "";
+    const session = raw.session && typeof raw.session === "object" ? raw.session as Record<string, unknown> : {};
+    const startTime = typeof session.startTime === "string" ? session.startTime : "";
+    const endTime = typeof session.endTime === "string" ? session.endTime : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(startTime)) return event;
+    const normalized = {
+      ...event,
+      startsAt: chinaDateTime(date, startTime).toISOString(),
+      endsAt: /^\d{1,2}:\d{2}$/.test(endTime) ? chinaDateTime(date, endTime).toISOString() : event.endsAt,
+    };
+    return { ...normalized, priority: scoreAcademicEvent(normalized) };
+  }
+  return event;
+}
+
 function scheduleChange(oldEvent: AcademicEvent, nextEvent: AcademicEvent, at: string): AcademicEvent {
   const oldTime = oldEvent.startsAt ? new Date(oldEvent.startsAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "时间待定";
   const nextTime = nextEvent.startsAt ? new Date(nextEvent.startsAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "时间待定";
@@ -189,6 +222,12 @@ export function reconcileSync(
     if (old.kind === "schedule_change" && Date.parse(old.firstSeenAt) >= retentionStart && !events.some((event) => event.id === old.id)) {
       events.push(old);
     }
+  }
+
+  // Migrate timestamps cached before the server timezone was made explicit.
+  // The original official date/time is retained in each source record.
+  for (let index = 0; index < events.length; index += 1) {
+    events[index] = normalizeCachedAcademicTime(events[index]);
   }
 
   const states = { ...(previous?.states ?? {}) };
