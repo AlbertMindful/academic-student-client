@@ -18,8 +18,8 @@ const countLabels: Record<string, string> = {
   chaoxingCourses: "匹配课程",
   chaoxingInbox: "收件箱",
   chaoxingActivities: "课程动态",
-  chaoxingAssignments: "未完成作业",
-  chaoxingOnlineExams: "线上考试",
+  chaoxingAssignments: "学习通作业",
+  chaoxingOnlineExams: "学习通考试",
 };
 
 export default function DataPage() {

@@ -79,7 +79,7 @@ function keepOfficialCourseItems(incoming: AcademicSyncPayload, previous: Academ
     ...incoming.events,
     ...(previous?.payload.events ?? []),
   ]
-    .filter((value): value is string | AcademicEvent => typeof value === "string" || value.kind === "class")
+    .filter((value): value is string | AcademicEvent => typeof value === "string" || value.sources.some((source) => source.provider === "academic"))
     .map((value) => typeof value === "string" ? value : value.courseName)
     .filter((name): name is string => Boolean(name));
   const isUnifiedOnlineExam = (event: AcademicEvent) =>

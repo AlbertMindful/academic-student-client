@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { AlarmClock, CalendarClock, Check, ExternalLink } from "lucide-react";
 import type { AcademicEvent } from "@/lib/types";
 import { useAcademicCenter } from "@/hooks/use-academic-center";
@@ -33,17 +34,23 @@ function eventTimeLabel(event: AcademicEvent): string {
 
 export default function TodosPage() {
   const { cache, loadingCache, setEventState } = useAcademicCenter();
+  const [view, setView] = React.useState<"active" | "history">("active");
   if (loadingCache && !cache) return <TodosSkeleton />;
 
   const now = Date.now();
   const currentSemesterId = cache?.payload.currentSemester?.id;
-  const tasks = (cache?.payload.events ?? [])
-    .filter((event) => (event.kind === "assignment" || event.kind === "exam")
-      && isCurrentAcademicEvent(event, cache?.states[event.id], currentSemesterId, now))
+  const allTasks = (cache?.payload.events ?? [])
+    .filter((event) => (event.kind === "assignment" || event.kind === "exam") && !cache?.states[event.id]?.ignored);
+  const activeTasks = allTasks
+    .filter((event) => isCurrentAcademicEvent(event, cache?.states[event.id], currentSemesterId, now))
     .sort((a, b) => (eventMoment(a) ?? "9999").localeCompare(eventMoment(b) ?? "9999"));
-  const assignments = tasks.filter((event) => event.kind === "assignment").length;
-  const exams = tasks.length - assignments;
-  const urgent = tasks.filter((event) => {
+  const historyTasks = allTasks
+    .filter((event) => !isCurrentAcademicEvent(event, cache?.states[event.id], currentSemesterId, now))
+    .sort((a, b) => (eventMoment(b) ?? b.updatedAt).localeCompare(eventMoment(a) ?? a.updatedAt));
+  const tasks = view === "active" ? activeTasks : historyTasks;
+  const assignments = allTasks.filter((event) => event.kind === "assignment").length;
+  const exams = allTasks.length - assignments;
+  const urgent = activeTasks.filter((event) => {
     const value = eventMoment(event);
     if (!value) return false;
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T23:59:59+08:00` : value);
@@ -54,11 +61,15 @@ export default function TodosPage() {
     <div className="mx-auto max-w-4xl pb-16">
       <div className="mb-7">
         <h1 className="text-2xl font-semibold tracking-tight">待办</h1>
-        <p className="mt-1 text-sm text-muted-foreground">需要完成的作业与即将到来的考试。</p>
+        <p className="mt-1 text-sm text-muted-foreground">需要处理的事项在前，完成和过期记录安静归档。</p>
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-          <span><strong className="mr-1 text-foreground">{assignments}</strong>项作业</span>
-          <span><strong className="mr-1 text-foreground">{exams}</strong>场考试</span>
+          <span><strong className="mr-1 text-foreground">{assignments}</strong>项作业记录</span>
+          <span><strong className="mr-1 text-foreground">{exams}</strong>场考试记录</span>
           {urgent > 0 && <span className="text-amber-600 dark:text-amber-400"><strong className="mr-1">{urgent}</strong>项在 24 小时内</span>}
+        </div>
+        <div className="mt-5 inline-flex rounded-lg bg-muted p-1">
+          <button className={`rounded-md px-3 py-1.5 text-xs transition-colors ${view === "active" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`} onClick={() => setView("active")}>待处理 {activeTasks.length}</button>
+          <button className={`rounded-md px-3 py-1.5 text-xs transition-colors ${view === "history" ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`} onClick={() => setView("history")}>历史记录 {historyTasks.length}</button>
         </div>
       </div>
 
@@ -74,11 +85,11 @@ export default function TodosPage() {
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {sourceUrl && <Button asChild size="icon" variant="ghost" className="h-8 w-8"><a href={sourceUrl} target="_blank" rel="noreferrer" aria-label="打开原页面"><ExternalLink className="h-3.5 w-3.5" /></a></Button>}
-              <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="完成" onClick={() => setEventState(event.id, { done: true, read: true })}><Check className="h-3.5 w-3.5" /></Button>
+              {view === "active" && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="完成" onClick={() => setEventState(event.id, { done: true, read: true })}><Check className="h-3.5 w-3.5" /></Button>}
             </div>
           </div>
         );
-      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Check className="h-6 w-6 text-emerald-500" /><p className="mt-3 text-sm">目前没有需要处理的作业或考试</p></div>}
+      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Check className="h-6 w-6 text-emerald-500" /><p className="mt-3 text-sm">{view === "active" ? "目前没有需要处理的作业或考试" : "暂无历史记录"}</p></div>}
     </div>
   );
 }
