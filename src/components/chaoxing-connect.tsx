@@ -56,7 +56,7 @@ export function ChaoxingConnect({ onConnected, requiresReconnect = false }: { on
       {connected ? <Button variant="ghost" size="sm" onClick={() => void disconnect()}><Unplug className="h-3.5 w-3.5" />断开</Button> : <Button variant="outline" size="sm" onClick={() => void begin()}><QrCode className="h-3.5 w-3.5" />连接学习通</Button>}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>连接学习通</DialogTitle><DialogDescription>打开学习通 App 扫描并确认登录。连接后只读取课程相关信息。</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>连接学习通</DialogTitle><DialogDescription>打开学习通 App 扫描并确认登录。连接后将同步与你当前课程有关的通知、作业与考试等信息。</DialogDescription></DialogHeader>
           <div className="flex min-h-64 flex-col items-center justify-center py-3">
             {pendingId && (status === "waiting" || status === "scanned") && <div className="rounded-xl border bg-white p-3"><Image src={`/api/chaoxing/connect/qr?pendingId=${encodeURIComponent(pendingId)}`} alt="学习通登录二维码" width={208} height={208} unoptimized priority /></div>}
             {status === "loading" && <><Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /><p className="mt-3 text-sm text-muted-foreground">正在生成二维码</p></>}

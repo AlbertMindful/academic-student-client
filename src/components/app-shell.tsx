@@ -43,6 +43,7 @@ const NAV = [
   { href: "/exams", label: "考试", icon: ClipboardList },
   { href: "/todos", label: "待办", icon: ListTodo },
   { href: "/insights", label: "学业洞察", icon: Compass },
+  { href: "/data", label: "数据来源", icon: Database },
 ];
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {

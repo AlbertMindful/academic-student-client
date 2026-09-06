@@ -29,7 +29,7 @@ export default function DataPage() {
   return (
     <div className="mx-auto max-w-3xl pb-16">
       <div className="mb-8 flex items-start justify-between gap-4">
-        <div><h1 className="text-2xl font-semibold tracking-tight">数据与同步</h1><p className="mt-1 text-sm text-muted-foreground">查看来源状态与整理结果；不会显示登录凭证或会话信息。</p></div>
+        <div><h1 className="text-2xl font-semibold tracking-tight">数据来源</h1><p className="mt-1 text-sm text-muted-foreground">管理教务系统和学习通的连接状态。</p></div>
         <Button variant="outline" size="sm" onClick={() => void sync()} disabled={syncing}><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />更新</Button>
       </div>
       <section className="space-y-1">
