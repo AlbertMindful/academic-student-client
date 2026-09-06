@@ -15,6 +15,7 @@ import {
   LogOut,
   ListTodo,
   Menu,
+  MoreHorizontal,
   User,
   Database,
 } from "lucide-react";
@@ -35,22 +36,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const NAV = [
+const PRIMARY_NAV = [
   { href: "/dashboard", label: "今天", icon: LayoutDashboard },
   { href: "/activity", label: "所有动态", icon: Bell },
   { href: "/schedule", label: "课表", icon: CalendarDays },
+  { href: "/todos", label: "待办", icon: ListTodo },
+];
+
+const MORE_NAV = [
   { href: "/grades", label: "成绩", icon: ChartNoAxesColumn },
   { href: "/exams", label: "考试", icon: ClipboardList },
-  { href: "/todos", label: "待办", icon: ListTodo },
   { href: "/insights", label: "学业洞察", icon: Compass },
   { href: "/data", label: "数据来源", icon: Database },
 ];
 
-function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+function NavItems({ items, onNavigate }: { items: typeof PRIMARY_NAV; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-1.5">
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {items.map(({ href, label, icon: Icon }) => {
         const active =
           pathname === href || pathname.startsWith(`${href}/`);
         return (
@@ -71,6 +75,36 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
         );
       })}
     </nav>
+  );
+}
+
+function DesktopNav() {
+  const pathname = usePathname();
+  const activeMore = MORE_NAV.find(({ href }) => pathname === href || pathname.startsWith(`${href}/`));
+  const MoreIcon = activeMore?.icon ?? MoreHorizontal;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <NavItems items={PRIMARY_NAV} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className={cn(
+            "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
+            activeMore ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+          )}>
+            <MoreIcon className="h-[18px] w-[18px]" />
+            {activeMore?.label ?? "更多"}
+            <MoreHorizontal className="ml-auto h-4 w-4 opacity-50" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="right" sideOffset={8} className="w-48">
+          {MORE_NAV.map(({ href, label, icon: Icon }) => (
+            <DropdownMenuItem key={href} asChild>
+              <Link href={href}><Icon className="h-4 w-4" />{label}</Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -124,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div className="flex-1 px-3">
-          <NavItems />
+          <DesktopNav />
         </div>
         <div className="h-3" />
       </aside>
@@ -148,7 +182,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <DropdownMenuContent align="start" className="w-52 md:hidden">
                 <DropdownMenuLabel>导航</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <NavItems />
+                <NavItems items={PRIMARY_NAV} />
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>更多</DropdownMenuLabel>
+                <NavItems items={MORE_NAV} />
               </DropdownMenuContent>
             </DropdownMenu>
             <span className="text-sm font-medium md:hidden">学业中心</span>
