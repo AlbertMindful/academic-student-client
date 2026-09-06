@@ -82,12 +82,19 @@ function keepOfficialCourseItems(incoming: AcademicSyncPayload, previous: Academ
     .filter((value): value is string | AcademicEvent => typeof value === "string" || value.kind === "class")
     .map((value) => typeof value === "string" ? value : value.courseName)
     .filter((name): name is string => Boolean(name));
+  const isUnifiedOnlineExam = (event: AcademicEvent) =>
+    event.kind === "exam" &&
+    event.contextLabel === "线上考试" &&
+    event.sources.some((source) => source.provider === "chaoxing");
   if (!officialNames.length) {
-    return { ...incoming, events: incoming.events.filter((event) => !event.courseName || !event.sources.some((source) => source.provider === "chaoxing")) };
+    return { ...incoming, events: incoming.events.filter((event) =>
+      isUnifiedOnlineExam(event) || !event.courseName || !event.sources.some((source) => source.provider === "chaoxing"),
+    ) };
   }
   return {
     ...incoming,
     events: incoming.events.filter((event) =>
+      isUnifiedOnlineExam(event) ||
       !event.sources.some((source) => source.provider === "chaoxing") ||
       !event.courseName || officialNames.some((official) => courseMatches(event.courseName!, official)),
     ),
