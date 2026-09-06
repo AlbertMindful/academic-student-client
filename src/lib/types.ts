@@ -152,6 +152,85 @@ export interface DashboardData {
   gpa: GpaSummary;
 }
 
+export type AcademicEventKind =
+  | "class"
+  | "schedule_change"
+  | "assignment"
+  | "exam"
+  | "grade"
+  | "notice"
+  | "material";
+
+export type AcademicSourceId = "academic" | "chaoxing";
+
+export interface AcademicEventSource {
+  provider: AcademicSourceId;
+  providerLabel: string;
+  sourceId: string;
+  url?: string;
+  raw?: unknown;
+}
+
+/** A real-world academic item after provider normalization and cautious merging. */
+export interface AcademicEvent {
+  id: string;
+  kind: AcademicEventKind;
+  title: string;
+  summary?: string;
+  courseName?: string;
+  startsAt?: string;
+  endsAt?: string;
+  dueAt?: string;
+  location?: string;
+  status?: string;
+  semesterId?: string;
+  sources: AcademicEventSource[];
+  firstSeenAt: string;
+  updatedAt: string;
+  priority: number;
+  merge?: {
+    strategy: "exact" | "similar" | "manual";
+    confidence: number;
+    reason: string;
+  };
+}
+
+export interface AcademicEventState {
+  read: boolean;
+  done: boolean;
+  ignored: boolean;
+  pinned: boolean;
+  updatedAt: string;
+}
+
+export type ProviderHealthStatus =
+  | "ok"
+  | "degraded"
+  | "reauth_required"
+  | "not_connected";
+
+export interface ProviderHealth {
+  provider: AcademicSourceId;
+  label: string;
+  status: ProviderHealthStatus;
+  lastAttemptAt: string;
+  lastSuccessAt?: string;
+  message?: string;
+}
+
+export interface AcademicSyncPayload {
+  profile: StudentProfile;
+  currentSemester: Semester | null;
+  teachingWeek: TeachingWeek | null;
+  events: AcademicEvent[];
+  providers: ProviderHealth[];
+  syncedAt: string;
+  diagnostics: {
+    counts: Record<string, number>;
+    warnings: string[];
+  };
+}
+
 /** 登录凭证（仅在认证模块内部流转） */
 export interface LoginCredentials {
   username: string;

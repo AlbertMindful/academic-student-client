@@ -5,6 +5,7 @@ import type {
   Semester,
   StudentProfile,
   CourseSchedule,
+  AcademicSyncPayload,
 } from "@/lib/types";
 
 export interface ApiErrorBody {
@@ -116,5 +117,8 @@ export const api = {
   getExams(semesterId?: string): Promise<Exam[]> {
     const q = semesterId ? `?semesterId=${encodeURIComponent(semesterId)}` : "";
     return request(`/api/academic/exams${q}`);
+  },
+  syncAcademicCenter(): Promise<AcademicSyncPayload> {
+    return request("/api/academic/sync");
   },
 };
