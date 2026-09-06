@@ -31,7 +31,7 @@ export default function ActivityPage() {
     const state = cache?.states[event.id];
     if (filter === "active") {
       if (state?.done || state?.ignored) return false;
-      const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn;
+      const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn ?? event.publishedAt;
       const days = anchor ? (new Date(anchor).getTime() - now) / 86_400_000 : null;
       if (event.kind === "class") return days != null && days >= -0.2 && days <= 7;
       if (event.kind === "exam") return days == null || days >= -0.2;
@@ -42,7 +42,7 @@ export default function ActivityPage() {
     return true;
   }).sort((a, b) => filter === "active"
     ? (a.dueAt ?? a.startsAt ?? a.dueOn ?? a.startsOn ?? a.updatedAt).localeCompare(b.dueAt ?? b.startsAt ?? b.dueOn ?? b.startsOn ?? b.updatedAt)
-    : (b.startsAt ?? b.updatedAt).localeCompare(a.startsAt ?? a.updatedAt));
+    : (b.startsAt ?? b.publishedAt ?? b.updatedAt).localeCompare(a.startsAt ?? a.publishedAt ?? a.updatedAt));
 
   return (
     <div className="mx-auto max-w-4xl pb-16">
@@ -52,10 +52,10 @@ export default function ActivityPage() {
       </div>
       {events.length ? <div>{events.map((event) => {
         const state = cache?.states[event.id];
-        const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn;
+        const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn ?? event.publishedAt;
         return <div key={event.id} className={cn("group flex items-start gap-3 border-b border-border/60 py-4", (state?.done || state?.ignored) && "opacity-60")}>
           <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={cn("text-sm font-medium", state?.done && "line-through")}>{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{labels[event.kind]}</Badge>{state?.pinned && <Pin className="h-3 w-3 fill-current text-primary" />}</div><p className="mt-1 text-xs text-muted-foreground">{[anchor ? (event.dueAt || event.startsAt ? formatter.format(new Date(anchor)) : anchor) : undefined, event.location, event.sources.map((source) => source.providerLabel).join(" + ")].filter(Boolean).join(" · ")}</p>{event.summary && <p className="mt-1.5 text-sm text-muted-foreground">{event.summary}</p>}</div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={cn("text-sm font-medium", state?.done && "line-through")}>{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{labels[event.kind]}</Badge>{state?.pinned && <Pin className="h-3 w-3 fill-current text-primary" />}</div><p className="mt-1 text-xs text-muted-foreground">{[anchor ? (event.dueAt || event.startsAt || event.publishedAt ? formatter.format(new Date(anchor)) : anchor) : undefined, event.location, event.contextLabel, event.courseName].filter(Boolean).join(" · ")}</p>{event.summary && <p className="mt-1.5 text-sm text-muted-foreground">{event.summary}</p>}</div>
           <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
             <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={state?.done ? "恢复" : "完成"} onClick={() => setEventState(event.id, { done: !state?.done, ignored: false, read: true })}>{state?.done ? <RotateCcw className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}</Button>
             <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={state?.ignored ? "恢复" : "忽略"} onClick={() => setEventState(event.id, { ignored: !state?.ignored, done: false, read: true })}>{state?.ignored ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</Button>

@@ -98,6 +98,8 @@ function meaningfulSignature(event: AcademicEvent): string {
     kind: event.kind,
     title: event.title,
     summary: event.summary,
+    publishedAt: event.publishedAt,
+    sender: event.sender,
     startsAt: event.startsAt,
     endsAt: event.endsAt,
     dueAt: event.dueAt,
@@ -204,6 +206,20 @@ export function reconcileSync(
       }
     }
   } else {
+    const quietBefore = Date.parse(incoming.syncedAt) - 3 * 86_400_000;
+    for (const event of events) {
+      if (
+        !previousById.has(event.id) &&
+        event.publishedAt &&
+        Date.parse(event.publishedAt) < quietBefore
+      ) {
+        states[event.id] = {
+          ...defaultEventState(),
+          read: true,
+          updatedAt: incoming.syncedAt,
+        };
+      }
+    }
     for (const id of changedIds) {
       const event = events.find((item) => item.id === id);
       const state = states[id];
@@ -222,7 +238,9 @@ export function reconcileSync(
     }
   }
   if (chaoxingUnavailable && previous) {
-    counts.chaoxingCourses = previous.payload.diagnostics.counts.chaoxingCourses ?? counts.chaoxingCourses;
+    for (const key of Object.keys(previous.payload.diagnostics.counts).filter((item) => item.startsWith("chaoxing"))) {
+      counts[key] = previous.payload.diagnostics.counts[key] ?? counts[key];
+    }
   }
   counts.events = events.length;
 

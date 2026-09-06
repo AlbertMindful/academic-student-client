@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
   const chaoxingConnection = chaoxingConnectionFromToken(req.cookies.get(chaoxingCookieName)?.value);
   let chaoxingEvents = [] as ReturnType<typeof gradesToEvents>;
   let chaoxingCourseCount = 0;
+  let chaoxingCounts = { inbox: 0, activities: 0, assignments: 0, onlineExams: 0 };
   let chaoxingHealth: ProviderHealth = {
     provider: "chaoxing", label: "学习通", status: "not_connected",
     lastAttemptAt: syncedAt, message: "尚未连接",
@@ -101,11 +102,12 @@ export async function GET(req: NextRequest) {
       const data = await getChaoxingAcademicData(chaoxingConnection.client, syncedAt, officialCourseNames);
       chaoxingEvents = data.events;
       chaoxingCourseCount = data.courses.length;
+      chaoxingCounts = data.counts;
       chaoxingHealth = {
         provider: "chaoxing", label: "学习通",
         status: data.warnings.length ? "degraded" : "ok",
         lastAttemptAt: syncedAt, lastSuccessAt: syncedAt,
-        message: data.warnings.length ? `${data.warnings.length} 门课程暂时未更新` : "已同步",
+        message: data.warnings.length ? `${data.warnings.length} 项内容暂时未更新` : "已同步",
       };
       warnings.push(...data.warnings.map((warning) => `学习通：${warning}`));
     } catch (cause) {
@@ -141,6 +143,10 @@ export async function GET(req: NextRequest) {
         courses: scheduleResult.data.length, exams: examResult.data.length,
         grades: gradeResult.data.length, events: events.length,
         chaoxingCourses: chaoxingCourseCount,
+        chaoxingInbox: chaoxingCounts.inbox,
+        chaoxingActivities: chaoxingCounts.activities,
+        chaoxingAssignments: chaoxingCounts.assignments,
+        chaoxingOnlineExams: chaoxingCounts.onlineExams,
       },
       warnings,
     },

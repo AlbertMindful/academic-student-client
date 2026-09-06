@@ -10,6 +10,17 @@ import { cn } from "@/lib/utils";
 import { ChaoxingConnect } from "@/components/chaoxing-connect";
 
 const formatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+const countLabels: Record<string, string> = {
+  courses: "教务课程",
+  exams: "教务考试",
+  grades: "成绩",
+  events: "整理后事项",
+  chaoxingCourses: "匹配课程",
+  chaoxingInbox: "收件箱",
+  chaoxingActivities: "课程动态",
+  chaoxingAssignments: "未完成作业",
+  chaoxingOnlineExams: "线上考试",
+};
 
 export default function DataPage() {
   const { cache, syncing, sync } = useAcademicCenter();
@@ -27,7 +38,7 @@ export default function DataPage() {
       </section>
       <section className="mt-10">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">本地数据</h2>
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-5">{Object.entries(payload?.diagnostics.counts ?? {}).map(([name, count]) => <div key={name} className="bg-background p-4"><div className="text-xl font-semibold tabular-nums">{count}</div><div className="mt-1 text-xs text-muted-foreground">{name === "courses" ? "教务课程" : name === "exams" ? "考试" : name === "grades" ? "成绩" : name === "chaoxingCourses" ? "匹配的学习通课程" : "整理后事件"}</div></div>)}</div>
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3">{Object.entries(payload?.diagnostics.counts ?? {}).map(([name, count]) => <div key={name} className="bg-background p-4"><div className="text-xl font-semibold tabular-nums">{count}</div><div className="mt-1 text-xs text-muted-foreground">{countLabels[name] ?? name}</div></div>)}</div>
         <p className="mt-3 text-xs leading-5 text-muted-foreground">课程以教务系统为准。学习通中的内容只有在课程名称与当前教务课程可靠匹配时才会进入首页，网课、公开课和历史课程不会混入。</p>
         <div className="mt-4 flex items-start gap-3 rounded-lg bg-muted/60 p-3 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><span>学业数据与已读、完成、忽略、置顶状态保存在当前设备。即使服务暂时不可用，也会继续显示最近一次成功同步的内容。</span></div>
       </section>
