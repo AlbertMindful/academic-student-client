@@ -6,6 +6,7 @@ import type {
   StudentProfile,
   CourseSchedule,
   AcademicSyncPayload,
+  AcademicEventState,
 } from "@/lib/types";
 
 export interface ApiErrorBody {
@@ -141,6 +142,15 @@ export const api = {
   },
   getConnections(): Promise<{ academic: boolean; chaoxing: boolean; academicIdentity?: string }> {
     return request("/api/connections", undefined, 5_000);
+  },
+  getEventStates(): Promise<{ enabled: boolean; states: Record<string, AcademicEventState> }> {
+    return request("/api/preferences", undefined, 10_000);
+  },
+  putEventStates(states: Record<string, AcademicEventState>): Promise<{ enabled: boolean; ok: boolean }> {
+    return request("/api/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ states }),
+    }, 10_000);
   },
   startChaoxingConnection(): Promise<{ pendingId: string }> {
     return request("/api/chaoxing/connect/start", { method: "POST" });
