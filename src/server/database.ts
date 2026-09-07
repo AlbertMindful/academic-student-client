@@ -61,6 +61,13 @@ export function databaseEnabled(): boolean {
   return Boolean(process.env.DATABASE_URL?.trim());
 }
 
+/** Safe for server logs: deliberately excludes messages, queries and config. */
+export function databaseErrorDetails(cause: unknown): { name: string; code?: string } {
+  if (!(cause instanceof Error)) return { name: "UnknownDatabaseError" };
+  const code = "code" in cause && typeof cause.code === "string" ? cause.code : undefined;
+  return { name: cause.name, ...(code ? { code } : {}) };
+}
+
 export async function readEventStates(ownerKey: string): Promise<Record<string, AcademicEventState>> {
   const sql = client();
   if (!sql) return {};
