@@ -529,7 +529,11 @@ async function fetchUnifiedTasks(
           nextUrl.searchParams.set("pageNum", String(pageNumber));
           return client.get(nextUrl.toString(), { headers: { Referer: url } });
         }
-        return client.post(url, { start: String((pageNumber - 1) * 12), nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: url } });
+        const nextUrl = new URL(url);
+        nextUrl.searchParams.set("status", "-1");
+        nextUrl.searchParams.set("start", String((pageNumber - 1) * 12));
+        nextUrl.searchParams.set("clientexam", "-1");
+        return client.get(nextUrl.toString(), { headers: { Referer: url } });
       }));
       const pages = [page, ...remainingPages];
       if (pages.some((result) => isChaoxingLoginPage(result.url, result.body))) throw new ChaoxingReauthError();
