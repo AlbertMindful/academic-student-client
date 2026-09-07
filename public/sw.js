@@ -1,4 +1,4 @@
-const CACHE_NAME = "academic-shell-v1";
+const CACHE_NAME = "academic-shell-v2";
 const STATIC_ASSETS = [
   "/offline",
   "/manifest.webmanifest",
@@ -31,7 +31,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline")));
+    event.respondWith(fetch(request, { cache: "no-store" }).catch(() => caches.match("/offline")));
     return;
   }
 
