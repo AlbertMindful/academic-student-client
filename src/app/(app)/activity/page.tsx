@@ -22,6 +22,15 @@ const labels: Record<AcademicEvent["kind"], string> = {
 
 const formatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 
+function eventLabel(event: AcademicEvent): string {
+  if (
+    event.kind === "exam"
+    && event.sources.some((source) => source.provider === "chaoxing")
+    && !event.sources.some((source) => source.provider === "academic")
+  ) return "线上考试";
+  return labels[event.kind];
+}
+
 export default function ActivityPage() {
   const { cache, loadingCache, setEventState } = useAcademicCenter();
   const [filter, setFilter] = React.useState<"current" | "done" | "ignored" | "history">("current");
@@ -52,7 +61,7 @@ export default function ActivityPage() {
         const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn ?? event.publishedAt;
         return <div key={event.id} className={cn("group flex items-start gap-3 border-b border-border/60 py-4", (completed || state?.ignored) && "opacity-60")}>
           <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={cn("text-sm font-medium", completed && "line-through")}>{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{labels[event.kind]}</Badge>{state?.pinned && <Pin className="h-3 w-3 fill-current text-primary" />}</div><p className="mt-1 text-xs text-muted-foreground">{[anchor ? (event.dueAt || event.startsAt || event.publishedAt ? formatter.format(new Date(anchor)) : anchor) : undefined, event.location, event.contextLabel, event.courseName, event.sender ? `来自 ${event.sender}` : undefined].filter(Boolean).join(" · ")}</p>{event.summary && <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{event.summary}</p>}</div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={cn("text-sm font-medium", completed && "line-through")}>{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{eventLabel(event)}</Badge>{state?.pinned && <Pin className="h-3 w-3 fill-current text-primary" />}</div><p className="mt-1 text-xs text-muted-foreground">{[anchor ? (event.dueAt || event.startsAt || event.publishedAt ? formatter.format(new Date(anchor)) : anchor) : undefined, event.location, event.contextLabel, event.courseName, event.sender ? `来自 ${event.sender}` : undefined].filter(Boolean).join(" · ")}</p>{event.summary && <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{event.summary}</p>}</div>
           <div className="flex shrink-0 gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
             {!completed && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="完成" onClick={() => setEventState(event.id, { done: true, ignored: false, read: true })}><Check className="h-3.5 w-3.5" /></Button>}
             {state?.done && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="恢复" onClick={() => setEventState(event.id, { done: false, read: true })}><RotateCcw className="h-3.5 w-3.5" /></Button>}
