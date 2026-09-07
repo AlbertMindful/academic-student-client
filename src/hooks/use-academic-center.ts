@@ -6,6 +6,7 @@ import type { AcademicEventState } from "@/lib/types";
 import {
   loadAcademicCache,
   filterCacheByConnections,
+  mergeEventStates,
   reconcileSync,
   saveAcademicCache,
   updateEventState,
@@ -35,12 +36,17 @@ export function useAcademicCenter() {
       const knownAcademicCourseNames = Array.from(new Set((cachedPayload?.events ?? [])
         .filter((event) => event.courseName && event.sources.some((source) => source.provider === "academic"))
         .map((event) => event.courseName!)));
-      const payload = await api.syncAcademicCenter(cachedPayload?.officialCourseNames ?? [], knownAcademicCourseNames);
+      const [payload, remote] = await Promise.all([
+        api.syncAcademicCenter(cachedPayload?.officialCourseNames ?? [], knownAcademicCourseNames),
+        api.getEventStates().catch(() => null),
+      ]);
       if (requestNumber !== syncRef.current) return;
       setCache((current) => {
-        const next = reconcileSync(payload, current);
+        let next = reconcileSync(payload, current);
+        if (remote) next = { ...next, states: mergeEventStates(next.states, remote.states) };
         cacheRef.current = next;
         void saveAcademicCache(next);
+        if (remote?.enabled) void api.putEventStates(next.states).catch(() => undefined);
         return next;
       });
     } catch (cause) {
@@ -99,6 +105,7 @@ export function useAcademicCenter() {
       const next = updateEventState(current, eventId, patch);
       cacheRef.current = next;
       void saveAcademicCache(next);
+      void api.putEventStates({ [eventId]: next.states[eventId] }).catch(() => undefined);
       return next;
     });
   }, []);

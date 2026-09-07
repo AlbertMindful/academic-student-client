@@ -453,6 +453,18 @@ export function defaultEventState(): AcademicEventState {
   return { read: false, done: false, ignored: false, pinned: false, updatedAt: "" };
 }
 
+export function mergeEventStates(
+  local: Record<string, AcademicEventState>,
+  remote: Record<string, AcademicEventState>,
+): Record<string, AcademicEventState> {
+  const merged = { ...local };
+  for (const [eventId, remoteState] of Object.entries(remote)) {
+    const localState = merged[eventId];
+    if (!localState || remoteState.updatedAt > localState.updatedAt) merged[eventId] = remoteState;
+  }
+  return merged;
+}
+
 export function updateEventState(
   cache: AcademicCache,
   eventId: string,
