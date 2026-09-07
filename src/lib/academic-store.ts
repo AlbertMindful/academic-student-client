@@ -16,6 +16,11 @@ const STORE = "workspace";
 export interface AcademicCache {
   payload: AcademicSyncPayload;
   states: Record<string, AcademicEventState>;
+  /**
+   * Kept outside the visible payload so disconnecting an account can hide all
+   * of its data without forgetting which account the local actions belong to.
+   */
+  academicIdentity?: string;
   savedAt: string;
 }
 
@@ -81,12 +86,16 @@ export function filterCacheByConnections(
   cache: AcademicCache,
   connections: AcademicConnectionState,
 ): AcademicCache {
-  const hasAcademicData = Boolean(cache.payload.profile) || cache.payload.events.some((event) =>
-    event.sources.some((source) => source.provider === "academic"),
+  const cachedAcademicIdentity = cache.academicIdentity ?? cache.payload.profile?.studentId;
+  const academicIdentityChanged = Boolean(
+    connections.academic &&
+    connections.academicIdentity &&
+    cachedAcademicIdentity &&
+    connections.academicIdentity !== cachedAcademicIdentity,
   );
   const academicIdentityMatches = !connections.academicIdentity ||
-    (!hasAcademicData && !cache.payload.profile) ||
-    cache.payload.profile?.studentId === connections.academicIdentity;
+    !cachedAcademicIdentity ||
+    cachedAcademicIdentity === connections.academicIdentity;
   const activeConnections = {
     academic: connections.academic && academicIdentityMatches,
     chaoxing: connections.chaoxing,
@@ -97,8 +106,10 @@ export function filterCacheByConnections(
     const sources = event.sources.filter((source) => activeConnections[source.provider]);
     return sources.length ? [{ ...event, sources }] : [];
   });
-  const eventIds = new Set(events.map((event) => event.id));
-  const states = Object.fromEntries(Object.entries(cache.states).filter(([id]) => eventIds.has(id)));
+  // Local actions are intentionally retained while a provider is disconnected.
+  // They are invisible without their events, then apply again when the same
+  // stable event ids return. A different academic identity starts clean.
+  const states = academicIdentityChanged ? {} : cache.states;
   const counts: Record<string, number> = { ...cache.payload.diagnostics.counts, events: events.length };
   if (!activeConnections.academic) {
     counts.courses = 0;
@@ -119,6 +130,9 @@ export function filterCacheByConnections(
   });
   return {
     ...cache,
+    academicIdentity: academicIdentityChanged
+      ? connections.academicIdentity
+      : cachedAcademicIdentity,
     payload: {
       ...cache.payload,
       profile: activeConnections.academic ? cache.payload.profile : undefined,
@@ -301,10 +315,11 @@ export function reconcileSync(
   incoming: AcademicSyncPayload,
   previous: AcademicCache | null,
 ): AcademicCache {
+  const previousAcademicIdentity = previous?.academicIdentity ?? previous?.payload.profile?.studentId;
   if (
     incoming.profile?.studentId &&
-    previous?.payload.profile?.studentId &&
-    incoming.profile.studentId !== previous.payload.profile.studentId
+    previousAcademicIdentity &&
+    incoming.profile.studentId !== previousAcademicIdentity
   ) {
     previous = null;
   }
@@ -414,6 +429,7 @@ export function reconcileSync(
   counts.events = events.length;
 
   return {
+    academicIdentity: incoming.profile?.studentId ?? previous?.academicIdentity,
     payload: {
       ...incoming,
       officialCourseNames: incoming.officialCourseNames?.length
