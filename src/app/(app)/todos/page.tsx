@@ -76,11 +76,14 @@ export default function TodosPage() {
       {tasks.length ? <div>{tasks.map((event) => {
         const sourceUrl = event.sources.find((source) => source.url)?.url;
         const Icon = event.kind === "assignment" ? AlarmClock : CalendarClock;
+        const onlineExam = event.kind === "exam"
+          && event.sources.some((source) => source.provider === "chaoxing")
+          && !event.sources.some((source) => source.provider === "academic");
         return (
           <div key={event.id} className="group flex items-start gap-3 border-b border-border/60 py-4 last:border-0">
             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Icon className="h-4 w-4" /></span>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{event.kind === "assignment" ? "作业" : event.contextLabel === "线上考试" ? "线上考试" : "考试"}</Badge></div>
+              <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{event.kind === "assignment" ? "作业" : onlineExam ? "线上考试" : "考试"}</Badge></div>
               <p className="mt-1 text-xs text-muted-foreground">{[eventTimeLabel(event), event.courseName, event.location, event.status].filter(Boolean).join(" · ")}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
