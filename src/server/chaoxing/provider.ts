@@ -536,7 +536,14 @@ async function fetchUnifiedTasks(
         events.push(...nextEvents);
         previousPageKey = pageKey;
       }
-      return kind === "work" ? hydrateWorkDeadlines(client, events, fetchedAt) : events;
+      const orderedEvents = events.map((event, sourceOrder) => ({
+        ...event,
+        sources: event.sources.map((source) => {
+          const raw = source.raw && typeof source.raw === "object" ? source.raw as Record<string, unknown> : {};
+          return { ...source, raw: { ...raw, sourceOrder } };
+        }),
+      }));
+      return kind === "work" ? hydrateWorkDeadlines(client, orderedEvents, fetchedAt) : orderedEvents;
     } catch (cause) {
       if (cause instanceof ChaoxingReauthError) throw cause;
       return null;

@@ -25,6 +25,17 @@ function recentlyAdded(event: AcademicEvent, days: number, now: number): boolean
   return age != null && age >= -1 && age <= days;
 }
 
+/** Platform completion is authoritative; local completion is an additional personal state. */
+export function isCompletedAcademicEvent(
+  event: AcademicEvent,
+  state?: AcademicEventState,
+): boolean {
+  if (state?.done) return true;
+  const status = event.status ?? "";
+  if (/未完成|未提交|未交卷|未交/.test(status)) return false;
+  return /已完成|待批阅|已交卷|已提交|已交/.test(status);
+}
+
 /**
  * Whether an event still deserves space in the daily information flow.
  *
@@ -83,7 +94,7 @@ export function isHistoricalAcademicEvent(
   currentSemesterId: string | undefined,
   now = Date.now(),
 ): boolean {
-  if (state?.done || state?.ignored || isCurrentAcademicEvent(event, state, currentSemesterId, now)) return false;
+  if (state?.ignored || isCompletedAcademicEvent(event, state) || isCurrentAcademicEvent(event, state, currentSemesterId, now)) return false;
   // Classes beyond the seven-day activity horizon are upcoming, not history;
   // they remain available in the full schedule without cluttering this feed.
   if (event.kind === "class") {

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { isCurrentAcademicEvent, isHistoricalAcademicEvent } from "@/lib/event-visibility";
+import { isCompletedAcademicEvent, isCurrentAcademicEvent, isHistoricalAcademicEvent } from "@/lib/event-visibility";
 
 const labels: Record<AcademicEvent["kind"], string> = {
   class: "课程",
@@ -29,10 +29,11 @@ export default function ActivityPage() {
 
   const now = Date.now();
   const events = [...(cache?.payload.events ?? [])].filter((event) => {
+    if (event.kind === "class") return false;
     const state = cache?.states[event.id];
     const currentSemesterId = cache?.payload.currentSemester?.id;
     if (filter === "current") return isCurrentAcademicEvent(event, state, currentSemesterId, now);
-    if (filter === "done") return state?.done;
+    if (filter === "done") return isCompletedAcademicEvent(event, state);
     if (filter === "ignored") return state?.ignored;
     return isHistoricalAcademicEvent(event, state, currentSemesterId, now);
   }).sort((a, b) => filter === "current"
@@ -47,12 +48,14 @@ export default function ActivityPage() {
       </div>
       {events.length ? <div>{events.map((event) => {
         const state = cache?.states[event.id];
+        const completed = isCompletedAcademicEvent(event, state);
         const anchor = event.dueAt ?? event.startsAt ?? event.dueOn ?? event.startsOn ?? event.publishedAt;
-        return <div key={event.id} className={cn("group flex items-start gap-3 border-b border-border/60 py-4", (state?.done || state?.ignored) && "opacity-60")}>
+        return <div key={event.id} className={cn("group flex items-start gap-3 border-b border-border/60 py-4", (completed || state?.ignored) && "opacity-60")}>
           <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={cn("text-sm font-medium", state?.done && "line-through")}>{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{labels[event.kind]}</Badge>{state?.pinned && <Pin className="h-3 w-3 fill-current text-primary" />}</div><p className="mt-1 text-xs text-muted-foreground">{[anchor ? (event.dueAt || event.startsAt || event.publishedAt ? formatter.format(new Date(anchor)) : anchor) : undefined, event.location, event.contextLabel, event.courseName, event.sender ? `来自 ${event.sender}` : undefined].filter(Boolean).join(" · ")}</p>{event.summary && <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{event.summary}</p>}</div>
-          <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
-            <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={state?.done ? "恢复" : "完成"} onClick={() => setEventState(event.id, { done: !state?.done, ignored: false, read: true })}>{state?.done ? <RotateCcw className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}</Button>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={cn("text-sm font-medium", completed && "line-through")}>{event.title}</span><Badge variant="outline" className="h-5 text-[10px] font-normal">{labels[event.kind]}</Badge>{state?.pinned && <Pin className="h-3 w-3 fill-current text-primary" />}</div><p className="mt-1 text-xs text-muted-foreground">{[anchor ? (event.dueAt || event.startsAt || event.publishedAt ? formatter.format(new Date(anchor)) : anchor) : undefined, event.location, event.contextLabel, event.courseName, event.sender ? `来自 ${event.sender}` : undefined].filter(Boolean).join(" · ")}</p>{event.summary && <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{event.summary}</p>}</div>
+          <div className="flex shrink-0 gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+            {!completed && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="完成" onClick={() => setEventState(event.id, { done: true, ignored: false, read: true })}><Check className="h-3.5 w-3.5" /></Button>}
+            {state?.done && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="恢复" onClick={() => setEventState(event.id, { done: false, read: true })}><RotateCcw className="h-3.5 w-3.5" /></Button>}
             <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={state?.ignored ? "恢复" : "忽略"} onClick={() => setEventState(event.id, { ignored: !state?.ignored, done: false, read: true })}>{state?.ignored ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</Button>
           </div>
         </div>;
