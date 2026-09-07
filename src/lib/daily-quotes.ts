@@ -37,7 +37,7 @@ export const DAILY_QUOTES: readonly DailyQuote[] = [
   { text: "一切有为法，如梦幻泡影，如露亦如电，应作如是观。", source: "《金刚经》", tradition: "释" },
   { text: "过去心不可得，现在心不可得，未来心不可得。", source: "《金刚经》", tradition: "释" },
   { text: "不取于相，如如不动。", source: "《金刚经》", tradition: "释" },
-  { text: "色即是空，空即是色。", source: "《心经》", tradition: "释" },
+  { text: "制心一处，无事不办。", source: "《佛遗教经》", tradition: "释" },
   { text: "照见五蕴皆空，度一切苦厄。", source: "《心经》", tradition: "释" },
   { text: "诸恶莫作，众善奉行，自净其意，是诸佛教。", source: "《法句经》", tradition: "释" },
   { text: "心如工画师，能画诸世间。", source: "《华严经》", tradition: "释" },
