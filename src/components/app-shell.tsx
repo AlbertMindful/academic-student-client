@@ -154,7 +154,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div>
             <span className="block text-sm font-semibold tracking-tight">学业中心</span>
-            <span className="block text-[11px] text-muted-foreground">今天需要知道什么</span>
           </div>
         </div>
         <div className="flex-1 px-3">

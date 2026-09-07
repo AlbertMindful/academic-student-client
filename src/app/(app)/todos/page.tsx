@@ -8,6 +8,7 @@ import { isCompletedAcademicEvent, isCurrentAcademicEvent } from "@/lib/event-vi
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DailyQuote } from "@/components/daily-quote";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   month: "numeric",
@@ -87,7 +88,6 @@ export default function TodosPage() {
     <div className="mx-auto max-w-4xl pb-16">
       <div className="mb-7">
         <h1 className="text-2xl font-semibold tracking-tight">待办</h1>
-        <p className="mt-1 text-sm text-muted-foreground">需要处理的事项在前，完成和过期记录安静归档。</p>
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
           <span><strong className="mr-1 text-foreground">{assignments}</strong>项作业记录</span>
           <span><strong className="mr-1 text-foreground">{exams}</strong>场考试记录</span>
@@ -120,7 +120,7 @@ export default function TodosPage() {
             </div>
           </div>
         );
-      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Check className="h-6 w-6 text-emerald-500" /><p className="mt-3 text-sm">{view === "active" ? "目前没有需要处理的作业或考试" : view === "done" ? "暂无已完成记录" : "暂无历史记录"}</p></div>}
+      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Check className="h-6 w-6 text-emerald-500" /><DailyQuote compact className="mt-3 max-w-md" /></div>}
     </div>
   );
 }
