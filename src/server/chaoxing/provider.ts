@@ -432,7 +432,7 @@ function parseGlobalExamPage(
       UNIFIED_EXAM_URL,
       true,
     );
-    if (!title || !courseName) return;
+    if (!title) return;
     const deadline = parseTaskDeadline(`${timing} ${item.text()}`, now);
     const url = safeChaoxingUrl(rawUrl, UNIFIED_EXAM_URL) ?? UNIFIED_EXAM_URL;
     const sourceId = rawUrl || `${courseName}:${title}`;
