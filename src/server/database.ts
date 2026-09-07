@@ -13,7 +13,12 @@ const databaseGlobal = globalThis as DatabaseGlobal;
 function client(): ReturnType<typeof postgres> | null {
   const url = process.env.DATABASE_URL?.trim();
   if (!url) return null;
-  return databaseGlobal.__academicDatabase ??= postgres(url, {
+  // Neon includes libpq's channel_binding option in new connection strings.
+  // Postgres.js forwards unknown query parameters to the server as startup
+  // settings, where channel_binding is rejected. TLS remains mandatory below.
+  const connectionUrl = new URL(url);
+  connectionUrl.searchParams.delete("channel_binding");
+  return databaseGlobal.__academicDatabase ??= postgres(connectionUrl.toString(), {
     max: 3,
     idle_timeout: 20,
     connect_timeout: 10,
