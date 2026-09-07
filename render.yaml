@@ -26,6 +26,3 @@ services:
         value: "15552000000"
       - key: ACADEMIC_SESSION_SECRET
         generateValue: true
-      # 在 Render 控制台中安全设置 Neon 的 pooled connection string。
-      - key: DATABASE_URL
-        sync: false
