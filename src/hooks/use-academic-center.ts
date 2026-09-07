@@ -29,7 +29,7 @@ export function useAcademicCenter() {
     setError(null);
     const slowTimer = window.setTimeout(() => {
       if (requestNumber === syncRef.current) setSyncSlow(true);
-    }, 8_000);
+    }, 20_000);
     try {
       const cachedPayload = cacheRef.current?.payload;
       const knownAcademicCourseNames = Array.from(new Set((cachedPayload?.events ?? [])

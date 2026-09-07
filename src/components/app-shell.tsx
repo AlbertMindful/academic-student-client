@@ -147,7 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const initials = name.slice(0, 1) || "学";
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen max-w-full overflow-x-hidden">
       {/* 桌面侧边栏 */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/70 bg-card/70 backdrop-blur-2xl md:flex">
         <div className="flex items-center gap-3 px-5 py-6">
@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* 主区域 */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-x-hidden">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-3">
             {/* 移动端导航 */}
@@ -248,7 +248,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 py-6 md:px-8 md:py-9">
+        <main className="mx-auto w-full max-w-[1240px] flex-1 overflow-x-hidden px-4 py-6 md:px-8 md:py-9">
           <div key={pathname} className="page-enter">{children}</div>
         </main>
       </div>
