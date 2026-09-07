@@ -5,6 +5,7 @@ import { getSession } from "@/server/auth/academicAuth";
 import { credentialCookieName, openCredentials } from "@/server/auth/credential-token";
 import {
   databaseEnabled,
+  databaseErrorDetails,
   databaseOwnerKey,
   readEventStates,
   writeEventStates,
@@ -43,7 +44,8 @@ export async function GET(req: NextRequest) {
   if (!account) return unauthorized();
   try {
     return NextResponse.json({ enabled: databaseEnabled(), states: await readEventStates(databaseOwnerKey(account)) });
-  } catch {
+  } catch (cause) {
+    console.error("[preferences] database read failed", databaseErrorDetails(cause));
     return NextResponse.json({ error: { code: "DATABASE_UNAVAILABLE", message: "云端状态暂时不可用。" } }, { status: 503 });
   }
 }
@@ -65,7 +67,8 @@ export async function PUT(req: NextRequest) {
   try {
     await writeEventStates(databaseOwnerKey(account), states);
     return NextResponse.json({ enabled: databaseEnabled(), ok: true });
-  } catch {
+  } catch (cause) {
+    console.error("[preferences] database write failed", databaseErrorDetails(cause));
     return NextResponse.json({ error: { code: "DATABASE_UNAVAILABLE", message: "云端状态暂时不可用。" } }, { status: 503 });
   }
 }
