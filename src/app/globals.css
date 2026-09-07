@@ -100,6 +100,21 @@
   * { scroll-behavior: auto !important; }
 }
 
+/* Safari may expose an iPhone as a desktop-width page when "Request Desktop
+   Website" is enabled. Touch capability remains reliable in that mode. */
+@media (hover: none) and (pointer: coarse) {
+  .activity-filter-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .activity-mobile-actions {
+    display: flex !important;
+  }
+  .activity-desktop-actions {
+    display: none !important;
+  }
+}
+
 /* Refined scrollbars */
 @layer utilities {
   .scrollbar-thin {
