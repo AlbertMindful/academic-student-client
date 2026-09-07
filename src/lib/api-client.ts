@@ -137,7 +137,7 @@ export const api = {
     return request("/api/academic/sync", {
       method: "POST",
       body: JSON.stringify({ officialCourseNames, knownAcademicCourseNames }),
-    }, 25_000);
+    }, 45_000);
   },
   getConnections(): Promise<{ academic: boolean; chaoxing: boolean; academicIdentity?: string }> {
     return request("/api/connections", undefined, 5_000);

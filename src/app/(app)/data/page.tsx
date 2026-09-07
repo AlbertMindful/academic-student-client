@@ -37,7 +37,7 @@ export default function DataPage() {
         <div><h1 className="text-2xl font-semibold tracking-tight">数据来源</h1><p className="mt-1 text-sm text-muted-foreground">管理教务系统和学习通的连接状态。</p></div>
         <Button variant="outline" size="sm" onClick={() => void sync()} disabled={syncing}><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />{syncSlow ? "连接较慢" : syncing ? "更新中" : "更新"}</Button>
       </div>
-      {syncSlow && !error && <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300">连接响应较慢。超过 25 秒会自动停止，你可以直接重新绑定对应来源。</div>}
+      {syncSlow && !error && <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300">连接响应较慢。超过 45 秒会自动停止，你可以直接重新绑定对应来源。</div>}
       {error && <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300">更新已停止：{error.message}</div>}
       <section className="space-y-1">
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">信息来源</h2>
