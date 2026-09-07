@@ -4,6 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { Check, Loader2, QrCode, Unplug } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { clearProviderCache } from "@/lib/academic-store";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -47,6 +48,7 @@ export function ChaoxingConnect({ onConnected, requiresReconnect = false }: { on
 
   async function disconnect() {
     await api.disconnectChaoxing();
+    await clearProviderCache("chaoxing");
     setConnected(false);
   }
 

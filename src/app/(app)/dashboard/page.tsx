@@ -47,7 +47,7 @@ function iconFor(event: AcademicEvent) {
   return CircleAlert;
 }
 
-function SourceHealth({ providers, syncing }: { providers: ProviderHealth[]; syncing: boolean }) {
+function SourceHealth({ providers, syncing, slow }: { providers: ProviderHealth[]; syncing: boolean; slow: boolean }) {
   const unavailable = providers.filter((provider) => provider.status !== "ok");
   const healthyCount = providers.length - unavailable.length;
   return (
@@ -55,7 +55,7 @@ function SourceHealth({ providers, syncing }: { providers: ProviderHealth[]; syn
       <DropdownMenuTrigger asChild>
         <button className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
           <span className={cn("h-1.5 w-1.5 rounded-full", unavailable.length ? "bg-amber-500" : "bg-emerald-500")} />
-          {syncing ? "正在更新" : `${healthyCount}/${providers.length} 来源正常`}
+          {syncing ? (slow ? "连接较慢" : "正在更新") : `${healthyCount}/${providers.length} 来源正常`}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-2">
@@ -65,8 +65,8 @@ function SourceHealth({ providers, syncing }: { providers: ProviderHealth[]; syn
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">{provider.label}</span><span className="text-[11px] text-muted-foreground">{provider.status === "ok" ? "正常" : provider.status === "not_connected" ? "未连接" : "需留意"}</span></div>
               <p className="mt-0.5 text-xs text-muted-foreground">{provider.message}</p>
-              {provider.provider === "academic" && provider.status === "reauth_required" && <Link href="/login" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">重新连接</Link>}
-              {provider.provider === "chaoxing" && provider.status !== "ok" && <Link href="/data" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">去连接</Link>}
+              {provider.provider === "academic" && provider.status !== "ok" && <Link href="/login" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">重新绑定</Link>}
+              {provider.provider === "chaoxing" && provider.status !== "ok" && <Link href="/data" className="mt-1 inline-block text-xs font-medium text-foreground underline underline-offset-2">重新绑定</Link>}
             </div>
           </div>
         ))}
@@ -117,7 +117,7 @@ function EventSection({ title, hint, events, states, onOpen, onState, empty }: {
 
 export default function DashboardPage() {
   const { profile } = useSession();
-  const { cache, loadingCache, syncing, error, sync, setEventState } = useAcademicCenter();
+  const { cache, loadingCache, syncing, syncSlow, error, sync, setEventState } = useAcademicCenter();
   const [selected, setSelected] = React.useState<AcademicEvent | null>(null);
   const now = React.useMemo(() => new Date(), []);
   const today = localDateKey(now);
@@ -134,17 +134,22 @@ export default function DashboardPage() {
   const future = currentVisible.filter((event) => event.kind !== "class" && !attention.some((item) => item.id === event.id) && Boolean(eventAnchor(event))).sort((a, b) => (eventAnchor(a) ?? "").localeCompare(eventAnchor(b) ?? "")).slice(0, 7);
 
   if (loadingCache && !cache) return <DashboardLoading />;
-  if (!cache) return <div className="mx-auto max-w-xl py-24 text-center"><WifiOff className="mx-auto h-6 w-6 text-muted-foreground" /><h1 className="mt-4 text-lg font-semibold">暂时无法取得学业信息</h1><p className="mt-2 text-sm text-muted-foreground">{error?.message ?? "请检查网络后重试。"}</p><Button className="mt-5" onClick={() => void sync()}>重新尝试</Button></div>;
+  if (!cache) return <div className="mx-auto max-w-xl py-24 text-center"><WifiOff className="mx-auto h-6 w-6 text-muted-foreground" /><h1 className="mt-4 text-lg font-semibold">暂时无法取得学业信息</h1><p className="mt-2 text-sm text-muted-foreground">{error?.message ?? "请检查网络后重试。"}</p><div className="mt-5 flex justify-center gap-2"><Button onClick={() => void sync()}>重新尝试</Button><Button asChild variant="outline"><Link href="/data">检查连接</Link></Button></div></div>;
 
   const payload = cache.payload;
+  const reconnectProvider = payload.providers.find((provider) => provider.status === "reauth_required");
+  const hasAnyConnection = payload.providers.some((provider) => provider.status !== "not_connected");
   const noAttention = attention.length === 0;
   return (
     <div className="mx-auto max-w-5xl pb-16">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-sm text-muted-foreground">{dayFormatter.format(now)}</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{noAttention ? "今天没有什么需要特别处理" : `${profile?.name ?? "你"}，今天有 ${attention.length} 件事值得留意`}</h1>{payload.teachingWeek && <p className="mt-2 text-xs text-muted-foreground">第 {payload.teachingWeek.current} 教学周</p>}<DailyQuote className="mt-3 max-w-2xl" /></div>
-        <div className="flex items-center gap-1"><SourceHealth providers={payload.providers} syncing={syncing} /><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void sync()} disabled={syncing} aria-label="立即更新"><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} /></Button></div>
+        <div className="flex items-center gap-1"><SourceHealth providers={payload.providers} syncing={syncing} slow={syncSlow} /><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void sync()} disabled={syncing} aria-label="立即更新"><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} /></Button></div>
       </header>
-      {error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />{error.code === "SESSION_EXPIRED" ? <>教务系统登录已过期，当前仍显示上次结果。<Link href="/login" className="font-medium underline underline-offset-2">重新登录</Link></> : "更新失败，已保留并显示上次结果。"}</div>}
+      {syncSlow && !error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />连接响应较慢；若持续无结果，可<Link href="/data" className="font-medium underline underline-offset-2">检查连接或重新绑定</Link>。</div>}
+      {error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />更新已停止，当前仍显示有效的上次结果。<Link href="/data" className="font-medium underline underline-offset-2">检查连接或重新绑定</Link></div>}
+      {!error && !syncing && reconnectProvider && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />{reconnectProvider.label}连接已失效，当前仍显示该账号上次同步的结果。<Link href={reconnectProvider.provider === "academic" ? "/login" : "/data"} className="font-medium underline underline-offset-2">重新绑定</Link></div>}
+      {!hasAnyConnection && <div className="mb-8 rounded-xl border border-border/70 p-5"><h2 className="text-sm font-semibold">还没有连接数据来源</h2><p className="mt-1.5 text-xs leading-5 text-muted-foreground">绑定后才会显示对应账号的课程、考试、成绩与待办；旧账号的数据不会保留在这里。</p><div className="mt-4 flex flex-wrap gap-2"><Button asChild size="sm"><Link href="/login">绑定教务系统</Link></Button><Button asChild size="sm" variant="outline"><Link href="/data">绑定学习通</Link></Button></div></div>}
       <div className="grid gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.8fr)]">
         <div className="space-y-10">
           <EventSection title="需要注意" events={attention} states={cache.states} onOpen={setSelected} onState={setEventState} empty="无" />

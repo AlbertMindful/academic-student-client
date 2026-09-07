@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
+import { clearProviderCache } from "@/lib/academic-store";
 import { useSession } from "@/hooks/use-session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PwaInstallButton } from "@/components/pwa-install-button";
@@ -118,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setLoggingOut(true);
     try {
       await api.logout();
+      await clearProviderCache("academic");
     } finally {
       window.location.replace("/dashboard");
     }

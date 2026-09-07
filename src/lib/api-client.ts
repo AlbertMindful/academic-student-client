@@ -24,11 +24,16 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, timeoutMs = 20_000): Promise<T> {
   let res: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abortFromCaller = () => controller.abort();
+  init?.signal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
     res = await fetch(path, {
       ...init,
+      signal: controller.signal,
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
@@ -36,11 +41,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
     });
   } catch {
+    if (controller.signal.aborted && !init?.signal?.aborted) {
+      throw new ApiError(
+        "REQUEST_TIMEOUT",
+        "更新等待时间过长，请检查连接状态或重新绑定。",
+        0,
+      );
+    }
     throw new ApiError(
       "NETWORK_ERROR",
       "网络连接失败，请检查网络后重试。",
       0,
     );
+  } finally {
+    clearTimeout(timeout);
+    init?.signal?.removeEventListener("abort", abortFromCaller);
   }
 
   if (res.status === 204) return undefined as T;
@@ -122,7 +137,10 @@ export const api = {
     return request("/api/academic/sync", {
       method: "POST",
       body: JSON.stringify({ officialCourseNames, knownAcademicCourseNames }),
-    });
+    }, 25_000);
+  },
+  getConnections(): Promise<{ academic: boolean; chaoxing: boolean; academicIdentity?: string }> {
+    return request("/api/connections", undefined, 5_000);
   },
   startChaoxingConnection(): Promise<{ pendingId: string }> {
     return request("/api/chaoxing/connect/start", { method: "POST" });
