@@ -51,7 +51,6 @@ export default function GradesPage() {
             <CalendarRange className="h-4 w-4 text-primary" />
             选择学期
           </CardTitle>
-          <CardDescription>点击即可切换，成绩不会被重新判断或分类</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={semesterId} onValueChange={setSemesterId}>

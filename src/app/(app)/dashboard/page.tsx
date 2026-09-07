@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DailyQuote } from "@/components/daily-quote";
 
 const dayFormatter = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" });
 const timeFormatter = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -140,17 +141,17 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-5xl pb-16">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-sm text-muted-foreground">{dayFormatter.format(now)}</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{noAttention ? "今天没有什么需要特别处理" : `${profile?.name ?? "你"}，今天有 ${attention.length} 件事值得留意`}</h1>{payload.teachingWeek && <p className="mt-2 text-xs text-muted-foreground">第 {payload.teachingWeek.current} 教学周</p>}</div>
+        <div><p className="text-sm text-muted-foreground">{dayFormatter.format(now)}</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{noAttention ? "今天没有什么需要特别处理" : `${profile?.name ?? "你"}，今天有 ${attention.length} 件事值得留意`}</h1>{payload.teachingWeek && <p className="mt-2 text-xs text-muted-foreground">第 {payload.teachingWeek.current} 教学周</p>}<DailyQuote className="mt-3 max-w-2xl" /></div>
         <div className="flex items-center gap-1"><SourceHealth providers={payload.providers} syncing={syncing} /><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void sync()} disabled={syncing} aria-label="立即更新"><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} /></Button></div>
       </header>
       {error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />{error.code === "SESSION_EXPIRED" ? <>教务系统登录已过期，当前仍显示上次结果。<Link href="/login" className="font-medium underline underline-offset-2">重新登录</Link></> : "更新失败，已保留并显示上次结果。"}</div>}
       <div className="grid gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.8fr)]">
         <div className="space-y-10">
-          <EventSection title="需要注意" events={attention} states={cache.states} onOpen={setSelected} onState={setEventState} empty="今天没有临近截止、考试或未读的重要变化" />
-          <EventSection title="今天" hint={`${todayEvents.length} 个安排`} events={todayEvents} states={cache.states} onOpen={setSelected} onState={setEventState} empty="今天没有课程安排" />
+          <EventSection title="需要注意" events={attention} states={cache.states} onOpen={setSelected} onState={setEventState} empty="无" />
+          <EventSection title="今天" hint={`${todayEvents.length} 个安排`} events={todayEvents} states={cache.states} onOpen={setSelected} onState={setEventState} empty="无安排" />
         </div>
         <aside className="space-y-8 lg:border-l lg:border-border/60 lg:pl-8">
-          <EventSection title="接下来" events={future} states={cache.states} onOpen={setSelected} onState={setEventState} empty="未来几天很安静" />
+          <EventSection title="接下来" events={future} states={cache.states} onOpen={setSelected} onState={setEventState} empty="无" />
           <div className="border-t border-border/60 pt-5 text-xs text-muted-foreground"><div className="flex items-center justify-between gap-3"><span>上次更新 {timeFormatter.format(new Date(payload.syncedAt))}</span><Link href="/activity" className="inline-flex items-center gap-0.5 transition-colors hover:text-foreground">所有动态 <ChevronRight className="h-3 w-3" /></Link></div></div>
         </aside>
       </div>

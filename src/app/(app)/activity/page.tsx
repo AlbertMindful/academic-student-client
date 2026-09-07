@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { isCompletedAcademicEvent, isCurrentAcademicEvent, isHistoricalAcademicEvent } from "@/lib/event-visibility";
+import { DailyQuote } from "@/components/daily-quote";
 
 const labels: Record<AcademicEvent["kind"], string> = {
   class: "课程",
@@ -51,7 +52,7 @@ export default function ActivityPage() {
 
   return (
     <div className="mx-auto max-w-4xl pb-16">
-      <div className="mb-7"><h1 className="text-2xl font-semibold tracking-tight">所有动态</h1><p className="mt-1 text-sm text-muted-foreground">默认只显示仍值得关注的内容，较早的信息会自动移入历史。</p></div>
+      <div className="mb-7"><h1 className="text-2xl font-semibold tracking-tight">所有动态</h1></div>
       <div className="mb-5 flex gap-1 border-b pb-3">
         {(["current", "done", "ignored", "history"] as const).map((value) => <Button key={value} size="sm" variant={filter === value ? "secondary" : "ghost"} onClick={() => setFilter(value)}>{value === "current" ? "当前" : value === "done" ? "已完成" : value === "ignored" ? "已忽略" : "历史"}</Button>)}
       </div>
@@ -68,7 +69,7 @@ export default function ActivityPage() {
             <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={state?.ignored ? "恢复" : "忽略"} onClick={() => setEventState(event.id, { ignored: !state?.ignored, done: false, read: true })}>{state?.ignored ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</Button>
           </div>
         </div>;
-      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Inbox className="h-6 w-6" /><p className="mt-3 text-sm">这里还没有内容</p></div>}
+      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Inbox className="h-6 w-6" /><DailyQuote compact className="mt-3 max-w-md" /></div>}
     </div>
   );
 }
