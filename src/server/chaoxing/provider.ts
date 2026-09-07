@@ -483,14 +483,6 @@ async function hydrateWorkDeadlines(
   return hydrated;
 }
 
-function numericPageCount(html: string, selector: string): number {
-  const $ = cheerio.load(html);
-  return Math.min(10, Math.max(1, ...$(selector).toArray().map((node) => {
-    const onclick = $(node).attr("onclick") ?? "";
-    return Number(cleanText($(node).text()) || onclick.match(/changePage\((\d+)\)/)?.[1] || 1);
-  }).filter(Number.isFinite)));
-}
-
 function discoverUnifiedUrls(homeHtml: string): { work: string; exam: string } {
   const $ = cheerio.load(homeHtml);
   const find = (selector: string, fallback: string) => {
@@ -519,27 +511,31 @@ async function fetchUnifiedTasks(
         ? await client.get(url, { headers: { Referer: HOME_URL } })
         : await client.post(url, { start: "0", nohead: "0", fid: "", status: "-1", clientexam: "-1", sw: "" }, { headers: { Referer: HOME_URL } });
       if (isChaoxingLoginPage(page.url, page.body) || /请重新登录/.test(page.body)) throw new ChaoxingReauthError();
-      const pageCount = kind === "work"
-        ? numericPageCount(page.body, "li.xl-active, li.xl-active ~ li")
-        : numericPageCount(page.body, "[onclick*='changePage']");
-      const remainingPages = await Promise.all(Array.from({ length: pageCount - 1 }, async (_, index) => {
-        const pageNumber = index + 2;
+      const parsePage = (body: string) => kind === "work"
+        ? parseGlobalWorkPage(body, courses, officialCourseNames, fetchedAt)
+        : parseGlobalExamPage(body, courses, officialCourseNames, fetchedAt);
+      const events = parsePage(page.body);
+      let previousPageKey = events.map((event) => event.sources[0]?.sourceId ?? event.id).join("|");
+      for (let pageNumber = 2; pageNumber <= 10; pageNumber += 1) {
+        let nextPage;
         if (kind === "work") {
           const nextUrl = new URL(url);
           nextUrl.searchParams.set("pageNum", String(pageNumber));
-          return client.get(nextUrl.toString(), { headers: { Referer: url } });
+          nextPage = await client.get(nextUrl.toString(), { headers: { Referer: url } });
+        } else {
+          const nextUrl = new URL(url);
+          nextUrl.searchParams.set("status", "-1");
+          nextUrl.searchParams.set("start", String((pageNumber - 1) * 12));
+          nextUrl.searchParams.set("clientexam", "-1");
+          nextPage = await client.get(nextUrl.toString(), { headers: { Referer: url } });
         }
-        const nextUrl = new URL(url);
-        nextUrl.searchParams.set("status", "-1");
-        nextUrl.searchParams.set("start", String((pageNumber - 1) * 12));
-        nextUrl.searchParams.set("clientexam", "-1");
-        return client.get(nextUrl.toString(), { headers: { Referer: url } });
-      }));
-      const pages = [page, ...remainingPages];
-      if (pages.some((result) => isChaoxingLoginPage(result.url, result.body))) throw new ChaoxingReauthError();
-      const events = pages.flatMap((result) => kind === "work"
-        ? parseGlobalWorkPage(result.body, courses, officialCourseNames, fetchedAt)
-        : parseGlobalExamPage(result.body, courses, officialCourseNames, fetchedAt));
+        if (isChaoxingLoginPage(nextPage.url, nextPage.body)) throw new ChaoxingReauthError();
+        const nextEvents = parsePage(nextPage.body);
+        const pageKey = nextEvents.map((event) => event.sources[0]?.sourceId ?? event.id).join("|");
+        if (!nextEvents.length || pageKey === previousPageKey) break;
+        events.push(...nextEvents);
+        previousPageKey = pageKey;
+      }
       return kind === "work" ? hydrateWorkDeadlines(client, events, fetchedAt) : events;
     } catch (cause) {
       if (cause instanceof ChaoxingReauthError) throw cause;
