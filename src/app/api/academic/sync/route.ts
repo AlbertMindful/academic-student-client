@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import type { CourseSchedule, Exam, Grade, ProviderHealth, Semester, StudentProfile } from "@/lib/types";
 import { deduplicateAcademicEvents, examsToEvents, gradesToEvents, scheduleToEvents } from "@/lib/academic-events";
 import { computeTeachingWeek } from "@/lib/teaching-week";
-import { sessionCookieOptions } from "@/server/api-helpers";
+import { readSessionId, sessionCookieOptions } from "@/server/api-helpers";
 import { AcademicError } from "@/server/auth/errors";
 import { credentialsAreInvalid, withPersistentAcademicLogin } from "@/server/auth/persistent-login";
-import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credential-token";
+import { credentialCookieName, credentialCookieOptions, openCredentials } from "@/server/auth/credential-token";
+import { getSession } from "@/server/auth/academicAuth";
 import { serverConfig } from "@/server/config";
 import { chaoxingConnectionFromToken } from "@/server/chaoxing/connection";
-import { clearChaoxingSessionToken, readChaoxingSessionToken, writeChaoxingSessionToken } from "@/server/chaoxing/session-cookie";
+import { readChaoxingSessionToken, writeChaoxingSessionToken } from "@/server/chaoxing/session-cookie";
 import { ChaoxingReauthError, getChaoxingAcademicData } from "@/server/chaoxing/provider";
 
 export const dynamic = "force-dynamic";
@@ -38,9 +39,13 @@ async function synchronize(
   let gradeResult: SourceResult<Grade[]> = { data: [] };
   let renewedAcademicToken: string | undefined;
   let clearAcademicCredentials = false;
+  const academicWasBound = Boolean(
+    getSession(readSessionId(req)) ||
+    openCredentials(req.cookies.get(credentialCookieName)?.value),
+  );
   let academicHealth: ProviderHealth = {
-    provider: "academic", label: "教务系统", status: "reauth_required",
-    lastAttemptAt: syncedAt, message: "需要登录教务系统",
+    provider: "academic", label: "教务系统", status: "not_connected",
+    lastAttemptAt: syncedAt, message: "尚未连接",
   };
 
   // The academic system is one independent provider, not a gate for the app.
@@ -83,12 +88,12 @@ async function synchronize(
     };
   } catch (cause) {
     clearAcademicCredentials = credentialsAreInvalid(cause);
-    const reauth = clearAcademicCredentials || (cause instanceof AcademicError && cause.code === "SESSION_EXPIRED");
+    const reauth = !clearAcademicCredentials && academicWasBound && cause instanceof AcademicError && cause.code === "SESSION_EXPIRED";
     academicHealth = {
       provider: "academic", label: "教务系统",
-      status: reauth ? "reauth_required" : "degraded",
+      status: clearAcademicCredentials ? "not_connected" : reauth ? "reauth_required" : academicWasBound ? "degraded" : "not_connected",
       lastAttemptAt: syncedAt,
-      message: clearAcademicCredentials ? "密码可能已变更，请重新连接" : reauth ? "登录已失效，请重新连接" : "暂时无法更新",
+      message: clearAcademicCredentials ? "密码可能已变更，请重新绑定" : reauth ? "登录已失效，请重新绑定" : academicWasBound ? "暂时无法更新" : "尚未连接",
     };
     warnings.push(`教务系统：${academicHealth.message}`);
   }
@@ -179,9 +184,7 @@ async function synchronize(
     response.cookies.set(credentialCookieName, "", { ...credentialCookieOptions(), maxAge: 0 });
   }
   if (chaoxingConnection) {
-    if (chaoxingHealth.status === "reauth_required") {
-      clearChaoxingSessionToken(response);
-    } else {
+    if (chaoxingHealth.status !== "reauth_required") {
       writeChaoxingSessionToken(response, chaoxingConnection.refreshedToken());
     }
   }

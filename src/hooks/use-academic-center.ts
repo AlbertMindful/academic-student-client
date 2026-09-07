@@ -5,6 +5,7 @@ import { api, ApiError } from "@/lib/api-client";
 import type { AcademicEventState } from "@/lib/types";
 import {
   loadAcademicCache,
+  filterCacheByConnections,
   reconcileSync,
   saveAcademicCache,
   updateEventState,
@@ -15,6 +16,7 @@ export function useAcademicCenter() {
   const [cache, setCache] = React.useState<AcademicCache | null>(null);
   const [loadingCache, setLoadingCache] = React.useState(true);
   const [syncing, setSyncing] = React.useState(false);
+  const [syncSlow, setSyncSlow] = React.useState(false);
   const [error, setError] = React.useState<ApiError | null>(null);
   const syncRef = React.useRef(0);
   const cacheRef = React.useRef<AcademicCache | null>(null);
@@ -23,7 +25,11 @@ export function useAcademicCenter() {
     if (syncing) return;
     const requestNumber = ++syncRef.current;
     setSyncing(true);
+    setSyncSlow(false);
     setError(null);
+    const slowTimer = window.setTimeout(() => {
+      if (requestNumber === syncRef.current) setSyncSlow(true);
+    }, 8_000);
     try {
       const cachedPayload = cacheRef.current?.payload;
       const knownAcademicCourseNames = Array.from(new Set((cachedPayload?.events ?? [])
@@ -44,16 +50,25 @@ export function useAcademicCenter() {
         : new ApiError("UNKNOWN_ERROR", "暂时无法更新，正在显示上次结果。", 0);
       setError(apiError);
     } finally {
-      if (requestNumber === syncRef.current) setSyncing(false);
+      window.clearTimeout(slowTimer);
+      if (requestNumber === syncRef.current) {
+        setSyncing(false);
+        setSyncSlow(false);
+      }
     }
   }, [syncing]);
 
   React.useEffect(() => {
     let cancelled = false;
-    loadAcademicCache().then((stored) => {
+    Promise.all([
+      loadAcademicCache(),
+      api.getConnections().catch(() => null),
+    ]).then(([stored, connections]) => {
       if (cancelled) return;
-      setCache(stored);
-      cacheRef.current = stored;
+      const validCache = stored && connections ? filterCacheByConnections(stored, connections) : stored;
+      setCache(validCache);
+      cacheRef.current = validCache;
+      if (validCache && validCache !== stored) void saveAcademicCache(validCache);
       setLoadingCache(false);
       // Stale-while-revalidate: paint local data first, then refresh quietly.
       window.setTimeout(() => void sync(), 0);
@@ -64,6 +79,15 @@ export function useAcademicCenter() {
     };
     // sync intentionally runs once for this student; manual refresh uses callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
+    const reload = () => void loadAcademicCache().then((stored) => {
+      cacheRef.current = stored;
+      setCache(stored);
+    });
+    window.addEventListener("academic-cache-changed", reload);
+    return () => window.removeEventListener("academic-cache-changed", reload);
   }, []);
 
   const setEventState = React.useCallback((
@@ -79,5 +103,5 @@ export function useAcademicCenter() {
     });
   }, []);
 
-  return { cache, loadingCache, syncing, error, sync, setEventState };
+  return { cache, loadingCache, syncing, syncSlow, error, sync, setEventState };
 }

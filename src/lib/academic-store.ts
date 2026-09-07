@@ -73,6 +73,78 @@ export async function saveAcademicCache(cache: AcademicCache): Promise<void> {
   }
 }
 
+export type AcademicConnectionState = { academic: boolean; chaoxing: boolean; academicIdentity?: string };
+
+/** Remove data whose account is no longer bound. A temporary provider failure is
+ * deliberately handled elsewhere so offline data remains available. */
+export function filterCacheByConnections(
+  cache: AcademicCache,
+  connections: AcademicConnectionState,
+): AcademicCache {
+  const hasAcademicData = Boolean(cache.payload.profile) || cache.payload.events.some((event) =>
+    event.sources.some((source) => source.provider === "academic"),
+  );
+  const academicIdentityMatches = !connections.academicIdentity ||
+    (!hasAcademicData && !cache.payload.profile) ||
+    cache.payload.profile?.studentId === connections.academicIdentity;
+  const activeConnections = {
+    academic: connections.academic && academicIdentityMatches,
+    chaoxing: connections.chaoxing,
+  };
+  const events = cache.payload.events.flatMap((event) => {
+    const hadAcademicSource = event.sources.some((source) => source.provider === "academic");
+    if (hadAcademicSource && !activeConnections.academic) return [];
+    const sources = event.sources.filter((source) => activeConnections[source.provider]);
+    return sources.length ? [{ ...event, sources }] : [];
+  });
+  const eventIds = new Set(events.map((event) => event.id));
+  const states = Object.fromEntries(Object.entries(cache.states).filter(([id]) => eventIds.has(id)));
+  const counts: Record<string, number> = { ...cache.payload.diagnostics.counts, events: events.length };
+  if (!activeConnections.academic) {
+    counts.courses = 0;
+    counts.exams = 0;
+    counts.grades = 0;
+  }
+  if (!activeConnections.chaoxing) {
+    for (const key of Object.keys(counts).filter((key) => key.startsWith("chaoxing"))) counts[key] = 0;
+  }
+  const providers = cache.payload.providers.map((provider) => {
+    if (!connections[provider.provider]) {
+      return { ...provider, status: "not_connected" as const, lastSuccessAt: undefined, message: "尚未连接" };
+    }
+    if (provider.provider === "academic" && !academicIdentityMatches) {
+      return { ...provider, status: "degraded" as const, lastSuccessAt: undefined, message: "正在读取当前账号" };
+    }
+    return provider;
+  });
+  return {
+    ...cache,
+    payload: {
+      ...cache.payload,
+      profile: activeConnections.academic ? cache.payload.profile : undefined,
+      currentSemester: activeConnections.academic ? cache.payload.currentSemester : null,
+      teachingWeek: activeConnections.academic ? cache.payload.teachingWeek : null,
+      officialCourseNames: activeConnections.academic ? cache.payload.officialCourseNames : [],
+      events,
+      providers,
+      diagnostics: { ...cache.payload.diagnostics, counts },
+    },
+    states,
+  };
+}
+
+export async function clearProviderCache(provider: "academic" | "chaoxing"): Promise<void> {
+  const cache = await loadAcademicCache();
+  if (!cache) return;
+  const current = {
+    academic: cache.payload.providers.find((item) => item.provider === "academic")?.status !== "not_connected",
+    chaoxing: cache.payload.providers.find((item) => item.provider === "chaoxing")?.status !== "not_connected",
+  };
+  current[provider] = false;
+  await saveAcademicCache(filterCacheByConnections(cache, current));
+  window.dispatchEvent(new CustomEvent("academic-cache-changed"));
+}
+
 function keepOfficialCourseItems(incoming: AcademicSyncPayload, previous: AcademicCache | null): AcademicSyncPayload {
   const officialNames = [
     ...(incoming.officialCourseNames ?? []),
@@ -229,6 +301,13 @@ export function reconcileSync(
   incoming: AcademicSyncPayload,
   previous: AcademicCache | null,
 ): AcademicCache {
+  if (
+    incoming.profile?.studentId &&
+    previous?.payload.profile?.studentId &&
+    incoming.profile.studentId !== previous.payload.profile.studentId
+  ) {
+    previous = null;
+  }
   incoming = { ...incoming, events: incoming.events.map(normalizeCachedAcademicTime) };
   incoming = keepOfficialCourseItems(incoming, previous);
   const previousEvents = (previous?.payload.events ?? [])
@@ -319,8 +398,8 @@ export function reconcileSync(
     }
   }
 
-  const academicUnavailable = incoming.providers.some((provider) => provider.provider === "academic" && provider.status !== "ok");
-  const chaoxingUnavailable = incoming.providers.some((provider) => provider.provider === "chaoxing" && provider.status !== "ok");
+  const academicUnavailable = incoming.providers.some((provider) => provider.provider === "academic" && (provider.status === "degraded" || provider.status === "reauth_required"));
+  const chaoxingUnavailable = incoming.providers.some((provider) => provider.provider === "chaoxing" && (provider.status === "degraded" || provider.status === "reauth_required"));
   const counts = { ...incoming.diagnostics.counts };
   if (academicUnavailable && previous) {
     for (const key of ["courses", "exams", "grades"] as const) {
@@ -339,7 +418,7 @@ export function reconcileSync(
       ...incoming,
       officialCourseNames: incoming.officialCourseNames?.length
         ? incoming.officialCourseNames
-        : previous?.payload.officialCourseNames,
+        : academicUnavailable ? previous?.payload.officialCourseNames : [],
       events,
       diagnostics: { ...incoming.diagnostics, counts },
       providers: incoming.providers.map((provider) => {
