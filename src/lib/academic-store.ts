@@ -55,10 +55,11 @@ const CACHE_KEY = "personal";
 export async function loadAcademicCache(): Promise<AcademicCache | null> {
   try {
     const current = await transact("readonly", (store) => store.get(CACHE_KEY));
-    if (current) return current as AcademicCache;
+    if (current) return migrateAcademicCache(current as AcademicCache);
     // One-time migration from the earlier per-student cache layout.
     const all = await transact("readonly", (store) => store.getAll()) as AcademicCache[] | undefined;
-    return [...(all ?? [])].sort((a, b) => b.savedAt.localeCompare(a.savedAt))[0] ?? null;
+    const latest = [...(all ?? [])].sort((a, b) => b.savedAt.localeCompare(a.savedAt))[0];
+    return latest ? migrateAcademicCache(latest) : null;
   } catch {
     return null;
   }
@@ -151,6 +152,45 @@ function normalizeCachedAcademicTime(event: AcademicEvent): AcademicEvent {
   return event;
 }
 
+function isLegacyTimezoneScheduleChange(event: AcademicEvent): boolean {
+  if (event.kind !== "schedule_change" || !event.summary) return false;
+  const moments = [...event.summary.matchAll(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/g)];
+  if (moments.length !== 2 || moments[0][1] !== moments[1][1] || moments[0][2] !== moments[1][2]) return false;
+  const oldMinutes = Number(moments[0][3]) * 60 + Number(moments[0][4]);
+  const nextMinutes = Number(moments[1][3]) * 60 + Number(moments[1][4]);
+  if (Math.abs(oldMinutes - nextMinutes) !== 8 * 60) return false;
+
+  const officialStart = event.sources.flatMap((source) => {
+    if (source.provider !== "academic" || !source.raw || typeof source.raw !== "object") return [];
+    const session = (source.raw as Record<string, unknown>).session;
+    if (!session || typeof session !== "object") return [];
+    const startTime = (session as Record<string, unknown>).startTime;
+    return typeof startTime === "string" ? [startTime] : [];
+  })[0];
+  const nextTime = `${moments[1][3].padStart(2, "0")}:${moments[1][4]}`;
+  return officialStart === nextTime;
+}
+
+function migrateAcademicCache(cache: AcademicCache): AcademicCache {
+  const events = cache.payload.events
+    .map(normalizeCachedAcademicTime)
+    .filter((event) => !isLegacyTimezoneScheduleChange(event));
+  if (events.length === cache.payload.events.length && events.every((event, index) => event === cache.payload.events[index])) {
+    return cache;
+  }
+  return {
+    ...cache,
+    payload: {
+      ...cache.payload,
+      events,
+      diagnostics: {
+        ...cache.payload.diagnostics,
+        counts: { ...cache.payload.diagnostics.counts, events: events.length },
+      },
+    },
+  };
+}
+
 function scheduleChange(oldEvent: AcademicEvent, nextEvent: AcademicEvent, at: string): AcademicEvent {
   const oldTime = oldEvent.startsAt ? new Date(oldEvent.startsAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "时间待定";
   const nextTime = nextEvent.startsAt ? new Date(nextEvent.startsAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "时间待定";
@@ -189,8 +229,12 @@ export function reconcileSync(
   incoming: AcademicSyncPayload,
   previous: AcademicCache | null,
 ): AcademicCache {
+  incoming = { ...incoming, events: incoming.events.map(normalizeCachedAcademicTime) };
   incoming = keepOfficialCourseItems(incoming, previous);
-  const previousById = new Map(previous?.payload.events.map((event) => [event.id, event]));
+  const previousEvents = (previous?.payload.events ?? [])
+    .map(normalizeCachedAcademicTime)
+    .filter((event) => !isLegacyTimezoneScheduleChange(event));
+  const previousById = new Map(previousEvents.map((event) => [event.id, event]));
   const changedIds = new Set<string>();
   const events = incoming.events.map((event) => {
     const old = previousById.get(event.id);
@@ -206,12 +250,12 @@ export function reconcileSync(
 
   // A failed provider endpoint never erases previously cached information.
   const failed = failedKinds(incoming);
-  for (const old of previous?.payload.events ?? []) {
+  for (const old of previousEvents) {
     if (failed.has(old.kind) && !events.some((event) => event.id === old.id)) events.push(old);
   }
   for (const provider of incoming.providers) {
     if (provider.status !== "degraded" && provider.status !== "reauth_required") continue;
-    for (const old of previous?.payload.events ?? []) {
+    for (const old of previousEvents) {
       if (old.sources.some((source) => source.provider === provider.provider) && !events.some((event) => event.id === old.id)) events.push(old);
     }
   }
@@ -225,7 +269,7 @@ export function reconcileSync(
     }
   }
   const retentionStart = Date.parse(incoming.syncedAt) - 7 * 86_400_000;
-  for (const old of previous?.payload.events ?? []) {
+  for (const old of previousEvents) {
     if (old.kind === "schedule_change" && Date.parse(old.firstSeenAt) >= retentionStart && !events.some((event) => event.id === old.id)) {
       events.push(old);
     }
