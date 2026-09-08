@@ -18,7 +18,7 @@ import { useApi } from "@/hooks/use-api";
 import { computeGpa } from "@/lib/gpa";
 import {
   DAY_NAMES,
-  examCalendarFile,
+  academicCalendarFile,
   findFreeWindows,
   requiredGpa,
   upcomingExams,
@@ -34,12 +34,13 @@ import { Input } from "@/components/ui/input";
 
 export default function InsightsPage() {
   const { data, loading, error } = useApi(async () => {
-    const [schedule, grades, exams] = await Promise.all([
+    const [schedule, grades, exams, semesters] = await Promise.all([
       api.getSchedule(),
       api.getGrades(),
       api.getExams(),
+      api.getSemesters(),
     ]);
-    return { schedule, grades, exams };
+    return { schedule, grades, exams, semesters };
   }, []);
   const [plannedCredits, setPlannedCredits] = React.useState(20);
   const [target, setTarget] = React.useState(3.5);
@@ -49,13 +50,15 @@ export default function InsightsPage() {
   if (error) return <ErrorState message={error.message} />;
   if (!data) return null;
 
-  const load = weeklyLoad(data.schedule);
+  const allSchedule = data.schedule;
+  const load = weeklyLoad(allSchedule);
   const maxLoad = Math.max(...load, 1);
   const totalSections = load.reduce((sum, value) => sum + value, 0);
   const busiestIndex = load.indexOf(Math.max(...load));
-  const freeWindows = findFreeWindows(data.schedule);
+  const freeWindows = findFreeWindows(allSchedule);
   const nextExams = upcomingExams(data.exams);
   const allExams = data.exams;
+  const currentSemester = data.semesters.find((semester) => semester.isCurrent) ?? data.semesters[0];
   const gpa = computeGpa(data.grades, null);
   const needed = gpa.value == null
     ? null
@@ -63,11 +66,15 @@ export default function InsightsPage() {
   const feasible = needed != null && needed <= 4 && needed >= 0;
 
   function downloadCalendar() {
-    const blob = new Blob([examCalendarFile(allExams)], { type: "text/calendar;charset=utf-8" });
+    if (!currentSemester) return;
+    const blob = new Blob(
+      [academicCalendarFile(allSchedule, allExams, currentSemester.startDate)],
+      { type: "text/calendar;charset=utf-8" },
+    );
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "考试安排.ics";
+    link.download = "我的学业日历.ics";
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -170,12 +177,12 @@ export default function InsightsPage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle className="flex items-center gap-2 text-base"><Lightbulb className="h-4 w-4 text-amber-500" />行动建议</CardTitle>
-            <Button variant="outline" size="sm" onClick={downloadCalendar} disabled={!nextExams.length}><CalendarPlus />导出考试日历</Button>
+            <Button variant="outline" size="sm" onClick={downloadCalendar} disabled={!data.semesters.length || (!data.schedule.length && !allExams.length)}><CalendarPlus />导出学业日历</Button>
           </CardHeader>
           <CardContent className="space-y-3">
             <ActionRow icon={BookOpenCheck} title="成绩记录已同步" detail="成绩只按学校原始结果展示，不判断是否通过" />
             <ActionRow icon={Clock3} title={`${DAY_NAMES[busiestIndex]}减少额外安排`} detail={`当天有 ${maxLoad} 节课，建议把深度学习放到轻课日`} />
-            <ActionRow icon={CalendarPlus} title={nextExams[0] ? `为「${nextExams[0].courseName}」建立复习计划` : "暂无临近考试"} detail={nextExams[0] ? `${nextExams[0].date} · ${nextExams[0].location || "地点待定"}` : "可提前整理本学期课程笔记"} />
+            <ActionRow icon={CalendarPlus} title={nextExams[0] ? `为「${nextExams[0].courseName}」建立复习计划` : "课程和考试可以带走"} detail={nextExams[0] ? `${nextExams[0].date} · ${nextExams[0].location || "地点待定"}` : "导出后可一次加入手机或电脑日历"} />
           </CardContent>
         </Card>
       </div>
