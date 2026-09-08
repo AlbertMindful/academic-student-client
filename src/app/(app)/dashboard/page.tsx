@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlarmClock, BookOpen, CalendarClock, Check, ChevronRight, CircleAlert, ExternalLink, EyeOff, FileText, Mail, MoreHorizontal, Pin, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
+import { AlarmClock, BookOpen, CalendarClock, Check, ChevronRight, CircleAlert, Coffee, ExternalLink, EyeOff, FileText, Mail, MapPin, MoreHorizontal, Pin, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
 import type { AcademicEvent, AcademicEventState, ProviderHealth } from "@/lib/types";
 import { scoreAcademicEvent } from "@/lib/academic-events";
 import { isCurrentAcademicEvent } from "@/lib/event-visibility";
@@ -115,6 +115,55 @@ function EventSection({ title, hint, events, states, onOpen, onState, empty }: {
   );
 }
 
+function TodayRhythm({ courses, now }: { courses: AcademicEvent[]; now: Date }) {
+  const current = courses.find((event) => {
+    const start = event.startsAt ? new Date(event.startsAt).getTime() : Number.POSITIVE_INFINITY;
+    const end = event.endsAt ? new Date(event.endsAt).getTime() : start;
+    return start <= now.getTime() && now.getTime() < end;
+  });
+  const next = courses.find((event) => event.startsAt && new Date(event.startsAt).getTime() > now.getTime());
+  const completed = courses.filter((event) => event.endsAt && new Date(event.endsAt).getTime() <= now.getTime()).length;
+  const focus = current ?? next;
+  const status = current ? "正在进行" : next ? "下一节" : courses.length ? "今日课程已结束" : "今天没有课";
+  const detail = focus
+    ? [
+        focus.startsAt ? timeFormatter.format(new Date(focus.startsAt)) : undefined,
+        focus.endsAt ? timeFormatter.format(new Date(focus.endsAt)) : undefined,
+      ].filter(Boolean).join("–")
+    : courses.length ? `已完成 ${completed} 个安排` : "留一点时间给自己，也可以处理待办";
+
+  return (
+    <section className="mb-9 overflow-hidden rounded-2xl border border-primary/10 bg-card/75 shadow-[0_18px_55px_rgba(37,99,235,0.06)] backdrop-blur-xl">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", focus ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400")}>
+            {focus ? <BookOpen className="h-5 w-5" /> : <Coffee className="h-5 w-5" />}
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-primary">今日节奏</span>
+              <span className="h-1 w-1 rounded-full bg-border" />
+              <span className="text-xs text-muted-foreground">{status}</span>
+            </div>
+            <p className="mt-1 truncate text-base font-semibold tracking-tight">{focus?.title ?? detail}</p>
+            {focus && <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{detail}</span>{focus.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{focus.location}</span>}</p>}
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-5 sm:justify-end">
+          {courses.length > 0 && (
+            <div className="flex items-center gap-1" aria-label={`今日已完成 ${completed} 个，共 ${courses.length} 个课程安排`}>
+              {courses.map((event, index) => (
+                <span key={event.id} className={cn("h-1.5 w-5 rounded-full", index < completed ? "bg-primary" : event.id === current?.id ? "bg-primary/45" : "bg-border")} />
+              ))}
+            </div>
+          )}
+          <Link href="/schedule" className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary">完整课表 <ChevronRight className="h-3.5 w-3.5" /></Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const { profile } = useSession();
   const { cache, loadingCache, syncing, syncSlow, error, sync, setEventState } = useAcademicCenter();
@@ -150,6 +199,7 @@ export default function DashboardPage() {
       {error && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />更新已停止，当前仍显示有效的上次结果。<Link href="/data" className="font-medium underline underline-offset-2">检查连接或重新绑定</Link></div>}
       {!error && !syncing && reconnectProvider && <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-700 dark:text-amber-300"><WifiOff className="h-3.5 w-3.5" />{reconnectProvider.label}连接已失效，当前仍显示该账号上次同步的结果。<Link href={reconnectProvider.provider === "academic" ? "/login" : "/data"} className="font-medium underline underline-offset-2">重新绑定</Link></div>}
       {!hasAnyConnection && <div className="mb-8 rounded-xl border border-border/70 p-5"><h2 className="text-sm font-semibold">还没有连接数据来源</h2><p className="mt-1.5 text-xs leading-5 text-muted-foreground">绑定后才会显示对应账号的课程、考试、成绩与待办；旧账号的数据不会保留在这里。</p><div className="mt-4 flex flex-wrap gap-2"><Button asChild size="sm"><Link href="/login">绑定教务系统</Link></Button><Button asChild size="sm" variant="outline"><Link href="/data">绑定学习通</Link></Button></div></div>}
+      {hasAnyConnection && <TodayRhythm courses={todayEvents} now={now} />}
       <div className="grid gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.8fr)]">
         <div className="space-y-10">
           <EventSection title="需要注意" events={attention} states={cache.states} onOpen={setSelected} onState={setEventState} empty="无" />

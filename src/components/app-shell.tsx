@@ -66,7 +66,7 @@ function NavItems({ items, onNavigate }: { items: typeof PRIMARY_NAV; onNavigate
             className={cn(
               "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
               active
-                ? "bg-foreground text-background"
+                ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/10"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
@@ -90,7 +90,7 @@ function DesktopNav() {
         <DropdownMenuTrigger asChild>
           <button className={cn(
             "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
-            activeMore ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            activeMore ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/10" : "text-muted-foreground hover:bg-accent hover:text-foreground",
           )}>
             <MoreIcon className="h-[18px] w-[18px]" />
             {activeMore?.label ?? "更多"}
@@ -151,7 +151,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* 桌面侧边栏 */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/70 bg-card/70 backdrop-blur-2xl md:flex">
         <div className="flex items-center gap-3 px-5 py-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
             <GraduationCap className="h-[18px] w-[18px]" />
           </div>
           <div>

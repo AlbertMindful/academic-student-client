@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, EyeOff, Inbox, Pin, RotateCcw } from "lucide-react";
+import { Check, EyeOff, Inbox, Pin, RotateCcw, Search, X } from "lucide-react";
 import type { AcademicEvent } from "@/lib/types";
 import { useAcademicCenter } from "@/hooks/use-academic-center";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { isCompletedAcademicEvent, isCurrentAcademicEvent, isHistoricalAcademicEvent } from "@/lib/event-visibility";
 import { DailyQuote } from "@/components/daily-quote";
+import { Input } from "@/components/ui/input";
 
 const labels: Record<AcademicEvent["kind"], string> = {
   class: "课程",
@@ -35,6 +36,8 @@ function eventLabel(event: AcademicEvent): string {
 export default function ActivityPage() {
   const { cache, loadingCache, setEventState } = useAcademicCenter();
   const [filter, setFilter] = React.useState<"current" | "done" | "ignored" | "history">("current");
+  const [query, setQuery] = React.useState("");
+  const deferredQuery = React.useDeferredValue(query.trim().toLocaleLowerCase("zh-CN"));
   if (loadingCache && !cache) return <div className="space-y-3"><Skeleton className="h-8 w-40" />{Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-16" />)}</div>;
 
   const now = Date.now();
@@ -46,6 +49,13 @@ export default function ActivityPage() {
     if (filter === "done") return isCompletedAcademicEvent(event, state);
     if (filter === "ignored") return state?.ignored;
     return isHistoricalAcademicEvent(event, state, currentSemesterId, now);
+  }).filter((event) => {
+    if (!deferredQuery) return true;
+    return [event.title, event.summary, event.courseName, event.location, event.contextLabel, event.sender]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("zh-CN")
+      .includes(deferredQuery);
   }).sort((a, b) => filter === "current"
     ? (a.dueAt ?? a.startsAt ?? a.dueOn ?? a.startsOn ?? a.updatedAt).localeCompare(b.dueAt ?? b.startsAt ?? b.dueOn ?? b.startsOn ?? b.updatedAt)
     : (b.startsAt ?? b.publishedAt ?? b.updatedAt).localeCompare(a.startsAt ?? a.publishedAt ?? a.updatedAt));
@@ -55,6 +65,17 @@ export default function ActivityPage() {
       <div className="mb-7"><h1 className="text-2xl font-semibold tracking-tight">所有动态</h1></div>
       <div className="activity-filter-tabs mb-5 grid grid-cols-4 gap-1 border-b pb-3 sm:flex">
         {(["current", "done", "ignored", "history"] as const).map((value) => <Button key={value} size="sm" className="px-2" variant={filter === value ? "secondary" : "ghost"} onClick={() => setFilter(value)}>{value === "current" ? "当前" : value === "done" ? "已完成" : value === "ignored" ? "已忽略" : "历史"}</Button>)}
+      </div>
+      <div className="relative mb-5">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="查找课程、作业、通知或地点"
+          aria-label="查找动态"
+          className="border-border/70 bg-card/70 pl-9 pr-10 shadow-none"
+        />
+        {query && <button type="button" onClick={() => setQuery("")} aria-label="清空查找" className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
       </div>
       {events.length ? <div>{events.map((event) => {
         const state = cache?.states[event.id];
@@ -78,7 +99,7 @@ export default function ActivityPage() {
             <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={state?.ignored ? "恢复" : "忽略"} onClick={() => setEventState(event.id, { ignored: !state?.ignored, done: false, read: true })}>{state?.ignored ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</Button>
           </div>
         </div>;
-      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Inbox className="h-6 w-6" /><DailyQuote compact className="mt-3 max-w-md" /></div>}
+      })}</div> : <div className="flex flex-col items-center py-24 text-center text-muted-foreground"><Inbox className="h-6 w-6" />{deferredQuery ? <p className="mt-3 text-sm">没有找到相关动态</p> : <DailyQuote compact className="mt-3 max-w-md" />}</div>}
     </div>
   );
 }
