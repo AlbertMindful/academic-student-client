@@ -72,28 +72,39 @@ export async function readEventStates(ownerKey: string): Promise<Record<string, 
   const sql = client();
   if (!sql) return {};
   await ready(sql);
-  const rows = await sql<Array<{ event_id: string; state: AcademicEventState }>>`
-    SELECT event_id, state
+  const rows = await sql<Array<{ event_id: string; state: AcademicEventState; updated_at: Date }>>`
+    SELECT event_id, state, updated_at
     FROM academic_event_states
     WHERE owner_key = ${ownerKey}
   `;
-  return Object.fromEntries(rows.map((row) => [row.event_id, row.state]));
+  return Object.fromEntries(rows.map((row) => [row.event_id, {
+    ...row.state,
+    updatedAt: new Date(row.updated_at).toISOString(),
+  }]));
 }
 
 export async function writeEventStates(
   ownerKey: string,
   states: Record<string, AcademicEventState>,
-): Promise<void> {
+): Promise<Record<string, AcademicEventState>> {
   const sql = client();
-  if (!sql) return;
+  if (!sql) return {};
   await ready(sql);
   const entries = Object.entries(states);
-  if (!entries.length) return;
-  await sql.begin((transaction) => entries.map(([eventId, state]) => transaction`
+  if (!entries.length) return {};
+  const batches = await sql.begin((transaction) => entries.map(([eventId, state]) => transaction<Array<{
+    event_id: string;
+    state: AcademicEventState;
+    updated_at: Date;
+  }>>`
     INSERT INTO academic_event_states (owner_key, event_id, state, updated_at)
-    VALUES (${ownerKey}, ${eventId}, ${JSON.stringify(state)}::jsonb, ${state.updatedAt})
+    VALUES (${ownerKey}, ${eventId}, ${JSON.stringify(state)}::jsonb, CURRENT_TIMESTAMP)
     ON CONFLICT (owner_key, event_id) DO UPDATE
-    SET state = EXCLUDED.state, updated_at = EXCLUDED.updated_at
-    WHERE academic_event_states.updated_at <= EXCLUDED.updated_at
+    SET state = EXCLUDED.state, updated_at = CURRENT_TIMESTAMP
+    RETURNING event_id, state, updated_at
   `));
+  return Object.fromEntries(batches.flat().map((row) => [row.event_id, {
+    ...row.state,
+    updatedAt: new Date(row.updated_at).toISOString(),
+  }]));
 }

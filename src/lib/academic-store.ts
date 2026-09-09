@@ -16,6 +16,9 @@ const STORE = "workspace";
 export interface AcademicCache {
   payload: AcademicSyncPayload;
   states: Record<string, AcademicEventState>;
+  /** User actions waiting for a successful server acknowledgement. */
+  pendingStateIds?: string[];
+  stateSyncVersion?: 2;
   /**
    * Kept outside the visible payload so disconnecting an account can hide all
    * of its data without forgetting which account the local actions belong to.
@@ -261,11 +264,23 @@ function migrateAcademicCache(cache: AcademicCache): AcademicCache {
   const events = cache.payload.events
     .map(normalizeCachedAcademicTime)
     .filter((event) => !isLegacyTimezoneScheduleChange(event));
-  if (events.length === cache.payload.events.length && events.every((event, index) => event === cache.payload.events[index])) {
+  const needsStateSyncMigration = cache.stateSyncVersion !== 2;
+  const pendingStateIds = needsStateSyncMigration
+    ? Object.entries(cache.states)
+      .filter(([, state]) => state.done || state.ignored || state.pinned)
+      .map(([eventId]) => eventId)
+    : cache.pendingStateIds ?? [];
+  if (
+    !needsStateSyncMigration &&
+    events.length === cache.payload.events.length &&
+    events.every((event, index) => event === cache.payload.events[index])
+  ) {
     return cache;
   }
   return {
     ...cache,
+    pendingStateIds,
+    stateSyncVersion: 2,
     payload: {
       ...cache.payload,
       events,
@@ -311,6 +326,19 @@ function failedKinds(payload: AcademicSyncPayload): Set<AcademicEvent["kind"]> {
   return failed;
 }
 
+function stateContinuityKey(event: AcademicEvent): string | null {
+  if (
+    (event.kind !== "assignment" && event.kind !== "exam") ||
+    !event.sources.some((source) => source.provider === "chaoxing")
+  ) return null;
+  const normalize = (value: string | undefined) => (value ?? "")
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "");
+  const title = normalize(event.title);
+  const course = normalize(event.courseName);
+  return title ? `${event.kind}|${course}|${title}` : null;
+}
+
 export function reconcileSync(
   incoming: AcademicSyncPayload,
   previous: AcademicCache | null,
@@ -329,10 +357,18 @@ export function reconcileSync(
     .map(normalizeCachedAcademicTime)
     .filter((event) => !isLegacyTimezoneScheduleChange(event));
   const previousById = new Map(previousEvents.map((event) => [event.id, event]));
+  const previousByContinuity = new Map<string, AcademicEvent[]>();
+  for (const event of previousEvents) {
+    const key = stateContinuityKey(event);
+    if (key) previousByContinuity.set(key, [...(previousByContinuity.get(key) ?? []), event]);
+  }
+  const stateMigrations = new Map<string, string>();
   const changedIds = new Set<string>();
   const events = incoming.events.map((event) => {
-    const old = previousById.get(event.id);
+    const continuityMatches = previousByContinuity.get(stateContinuityKey(event) ?? "") ?? [];
+    const old = previousById.get(event.id) ?? (continuityMatches.length === 1 ? continuityMatches[0] : undefined);
     if (!old) return event;
+    if (old.id !== event.id) stateMigrations.set(old.id, event.id);
     const changed = meaningfulSignature(old) !== meaningfulSignature(event);
     if (changed) changedIds.add(event.id);
     return {
@@ -376,6 +412,15 @@ export function reconcileSync(
   }
 
   const states = { ...(previous?.states ?? {}) };
+  const pendingStateIds = new Set(previous?.pendingStateIds ?? []);
+  for (const [oldId, newId] of stateMigrations) {
+    const oldState = states[oldId];
+    if (!oldState || states[newId]) continue;
+    states[newId] = oldState;
+    if (oldState.done || oldState.ignored || oldState.pinned || pendingStateIds.has(oldId)) {
+      pendingStateIds.add(newId);
+    }
+  }
   // Existing grades are a baseline on first use, not dozens of false "new" alerts.
   if (!previous) {
     for (const event of events) {
@@ -445,6 +490,8 @@ export function reconcileSync(
       }),
     },
     states,
+    pendingStateIds: [...pendingStateIds],
+    stateSyncVersion: 2,
     savedAt: incoming.syncedAt,
   };
 }
@@ -456,13 +503,28 @@ export function defaultEventState(): AcademicEventState {
 export function mergeEventStates(
   local: Record<string, AcademicEventState>,
   remote: Record<string, AcademicEventState>,
+  preferLocalIds: ReadonlySet<string> = new Set(),
 ): Record<string, AcademicEventState> {
   const merged = { ...local };
   for (const [eventId, remoteState] of Object.entries(remote)) {
-    const localState = merged[eventId];
-    if (!localState || remoteState.updatedAt > localState.updatedAt) merged[eventId] = remoteState;
+    if (!preferLocalIds.has(eventId)) merged[eventId] = remoteState;
   }
   return merged;
+}
+
+export function acknowledgeEventStates(
+  cache: AcademicCache,
+  sent: Record<string, AcademicEventState>,
+  acknowledged: Record<string, AcademicEventState>,
+): AcademicCache {
+  const states = { ...cache.states };
+  const pending = new Set(cache.pendingStateIds ?? []);
+  for (const [eventId, serverState] of Object.entries(acknowledged)) {
+    if (states[eventId]?.updatedAt !== sent[eventId]?.updatedAt) continue;
+    states[eventId] = serverState;
+    pending.delete(eventId);
+  }
+  return { ...cache, states, pendingStateIds: [...pending], stateSyncVersion: 2 };
 }
 
 export function updateEventState(
@@ -477,5 +539,7 @@ export function updateEventState(
       ...cache.states,
       [eventId]: { ...current, ...patch, updatedAt: new Date().toISOString() },
     },
+    pendingStateIds: [...new Set([...(cache.pendingStateIds ?? []), eventId])],
+    stateSyncVersion: 2,
   };
 }
