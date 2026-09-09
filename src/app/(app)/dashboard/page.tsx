@@ -20,6 +20,17 @@ const dayFormatter = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "num
 const timeFormatter = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false });
 
+type NativeWidgetBridge = Window & {
+  webkit?: { messageHandlers?: { academicWidget?: { postMessage: (message: string) => void } } };
+};
+
+function NativeWidgetSync({ message }: { message: string }) {
+  React.useEffect(() => {
+    (window as NativeWidgetBridge).webkit?.messageHandlers?.academicWidget?.postMessage(message);
+  }, [message]);
+  return null;
+}
+
 function localDateKey(value: Date | string): string {
   const date = typeof value === "string" ? new Date(value) : value;
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -140,8 +151,21 @@ export default function DashboardPage() {
   const reconnectProvider = payload.providers.find((provider) => provider.status === "reauth_required");
   const hasAnyConnection = payload.providers.some((provider) => provider.status !== "not_connected");
   const noAttention = attention.length === 0;
+  const nativeWidgetMessage = JSON.stringify({
+    date: today,
+    updatedAt: payload.syncedAt,
+    teachingWeek: payload.teachingWeek?.current ?? null,
+    items: [...todayEvents, ...attention].slice(0, 6).map((event) => ({
+      id: event.id,
+      title: event.title,
+      detail: eventMeta(event),
+      kind: event.kind === "class" ? "课程" : event.kind === "exam" ? "考试" : event.kind === "assignment" ? "待办" : event.kind === "schedule_change" ? "调课" : event.kind === "notice" ? "通知" : "动态",
+      destination: event.kind === "class" || event.kind === "schedule_change" ? "schedule" : event.kind === "exam" ? "exams" : "todos",
+    })),
+  });
   return (
     <div className="mx-auto max-w-5xl pb-16">
+      <NativeWidgetSync message={nativeWidgetMessage} />
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-sm text-muted-foreground">{dayFormatter.format(now)}</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{noAttention ? "今天没有什么需要特别处理" : `${profile?.name ?? "你"}，今天有 ${attention.length} 件事值得留意`}</h1>{payload.teachingWeek && <p className="mt-2 text-xs text-muted-foreground">第 {payload.teachingWeek.current} 教学周</p>}<DailyQuote className="mt-3 max-w-2xl" /></div>
         <div className="flex items-center gap-1"><SourceHealth providers={payload.providers} syncing={syncing} slow={syncSlow} /><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void sync()} disabled={syncing} aria-label="立即更新"><RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} /></Button></div>
