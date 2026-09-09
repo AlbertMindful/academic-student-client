@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const account = identity(req);
   if (!account) return unauthorized();
-  const body = await req.json().catch(() => null) as { states?: unknown } | null;
+  const body = await req.json().catch(() => null) as { states?: unknown; mode?: unknown } | null;
   if (!body?.states || typeof body.states !== "object" || Array.isArray(body.states)) {
     return NextResponse.json({ error: { code: "INVALID_STATE", message: "状态数据无效。" } }, { status: 400 });
   }
@@ -65,8 +65,14 @@ export async function PUT(req: NextRequest) {
   }
   const states = Object.fromEntries(entries) as Record<string, AcademicEventState>;
   try {
-    await writeEventStates(databaseOwnerKey(account), states);
-    return NextResponse.json({ enabled: databaseEnabled(), ok: true });
+    const ownerKey = databaseOwnerKey(account);
+    // Clients before state-sync v2 pushed their entire cache after every refresh.
+    // Ignore those legacy bulk writes so a stale device cannot undo newer actions.
+    if (body.mode !== "mutation" && entries.length > 1) {
+      return NextResponse.json({ enabled: databaseEnabled(), ok: true, states: await readEventStates(ownerKey) });
+    }
+    const written = await writeEventStates(ownerKey, states);
+    return NextResponse.json({ enabled: databaseEnabled(), ok: true, states: written });
   } catch (cause) {
     console.error("[preferences] database write failed", databaseErrorDetails(cause));
     return NextResponse.json({ error: { code: "DATABASE_UNAVAILABLE", message: "云端状态暂时不可用。" } }, { status: 503 });

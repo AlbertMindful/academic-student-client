@@ -4,6 +4,7 @@ import * as React from "react";
 import { api, ApiError } from "@/lib/api-client";
 import type { AcademicEventState } from "@/lib/types";
 import {
+  acknowledgeEventStates,
   loadAcademicCache,
   filterCacheByConnections,
   mergeEventStates,
@@ -33,20 +34,33 @@ export function useAcademicCenter() {
     }, 20_000);
     try {
       const cachedPayload = cacheRef.current?.payload;
+      const pendingStates = Object.fromEntries((cacheRef.current?.pendingStateIds ?? []).flatMap((eventId) => {
+        const state = cacheRef.current?.states[eventId];
+        return state ? [[eventId, state]] : [];
+      }));
       const knownAcademicCourseNames = Array.from(new Set((cachedPayload?.events ?? [])
         .filter((event) => event.courseName && event.sources.some((source) => source.provider === "academic"))
         .map((event) => event.courseName!)));
-      const [payload, remote] = await Promise.all([
+      const [payload, pendingResult] = await Promise.all([
         api.syncAcademicCenter(cachedPayload?.officialCourseNames ?? [], knownAcademicCourseNames),
-        api.getEventStates().catch(() => null),
+        Object.keys(pendingStates).length
+          ? api.putEventStates(pendingStates).catch(() => null)
+          : Promise.resolve(null),
       ]);
+      const remote = await api.getEventStates().catch(() => null);
       if (requestNumber !== syncRef.current) return;
       setCache((current) => {
-        let next = reconcileSync(payload, current);
-        if (remote) next = { ...next, states: mergeEventStates(next.states, remote.states) };
+        let base = current;
+        if (base && pendingResult) base = acknowledgeEventStates(base, pendingStates, pendingResult.states);
+        if (base && remote) {
+          base = {
+            ...base,
+            states: mergeEventStates(base.states, remote.states, new Set(base.pendingStateIds ?? [])),
+          };
+        }
+        const next = reconcileSync(payload, base);
         cacheRef.current = next;
         void saveAcademicCache(next);
-        if (remote?.enabled) void api.putEventStates(next.states).catch(() => undefined);
         return next;
       });
     } catch (cause) {
@@ -100,14 +114,22 @@ export function useAcademicCenter() {
     eventId: string,
     patch: Partial<Omit<AcademicEventState, "updatedAt">>,
   ) => {
-    setCache((current) => {
-      if (!current) return current;
-      const next = updateEventState(current, eventId, patch);
-      cacheRef.current = next;
-      void saveAcademicCache(next);
-      void api.putEventStates({ [eventId]: next.states[eventId] }).catch(() => undefined);
-      return next;
-    });
+    const current = cacheRef.current;
+    if (!current) return;
+    const next = updateEventState(current, eventId, patch);
+    const sent = { [eventId]: next.states[eventId] };
+    cacheRef.current = next;
+    setCache(next);
+    void saveAcademicCache(next);
+    void api.putEventStates(sent).then((result) => {
+      setCache((latest) => {
+        if (!latest) return latest;
+        const acknowledged = acknowledgeEventStates(latest, sent, result.states);
+        cacheRef.current = acknowledged;
+        void saveAcademicCache(acknowledged);
+        return acknowledged;
+      });
+    }).catch(() => undefined);
   }, []);
 
   return { cache, loadingCache, syncing, syncSlow, error, sync, setEventState };

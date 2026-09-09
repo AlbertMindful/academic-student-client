@@ -110,6 +110,53 @@ function safeChaoxingUrl(value: string, base: string): string | undefined {
   }
 }
 
+function normalizedIdentityPart(value: string): string {
+  return cleanText(value).toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+}
+
+/** Ignore rotating session parameters when deriving a task's persistent id. */
+function stableTaskSourceId(
+  kind: "work" | "exam",
+  rawUrl: string,
+  courseName: string | undefined,
+  title: string,
+  baseUrl: string,
+): string {
+  const taskKeys = kind === "work"
+    ? ["workid", "workId", "jobid", "jobId"]
+    : ["examid", "examId", "testid", "testId", "examcode", "examCode"];
+  const courseKeys = ["courseid", "courseId", "courseid_", "classid", "classId", "clazzid", "clazzId"];
+  const candidates = [rawUrl];
+  try {
+    const decoded = decodeURIComponent(rawUrl);
+    if (decoded !== rawUrl) candidates.push(decoded);
+  } catch { /* malformed percent encoding */ }
+
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate, baseUrl);
+      const valueFor = (keys: string[]) => {
+        for (const key of keys) {
+          const value = url.searchParams.get(key);
+          if (value) return value;
+        }
+        return undefined;
+      };
+      const taskId = valueFor(taskKeys);
+      if (taskId) {
+        return `${kind}:${taskId}:${valueFor(courseKeys) ?? normalizedIdentityPart(courseName ?? "")}`;
+      }
+    } catch { /* the data attribute is not always a plain URL */ }
+  }
+
+  const taskPattern = kind === "work"
+    ? /(?:workid|jobid)[=:]([\w-]+)/i
+    : /(?:examid|testid|examcode)[=:]([\w-]+)/i;
+  const embeddedId = candidates.map((candidate) => candidate.match(taskPattern)?.[1]).find(Boolean);
+  if (embeddedId) return `${kind}:${embeddedId}:${normalizedIdentityPart(courseName ?? "")}`;
+  return `${kind}:${normalizedIdentityPart(courseName ?? "")}:${normalizedIdentityPart(title)}`;
+}
+
 function parseCalendarDate(text: string, now = new Date()): { at?: string; on?: string } {
   const normalized = text.replace(/年|\//g, "-").replace(/月/g, "-").replace(/日/g, " ");
   const matches = [...normalized.matchAll(/(?:(20\d{2})-)?(\d{1,2})-(\d{1,2})(?:\([^)]*\))?(?:\s+|\s*[截到][止期]?\s*)?(\d{1,2}:\d{2})?/g)];
@@ -383,9 +430,9 @@ function parseGlobalWorkPage(
     if (!title || !courseName || !status) return;
     const deadline = parseTaskDeadline(`${remaining} ${content.text()}`, now);
     const url = safeChaoxingUrl(rawUrl, UNIFIED_WORK_URL) ?? UNIFIED_WORK_URL;
-    const sourceId = rawUrl || `${courseName}:${title}`;
+    const sourceId = stableTaskSourceId("work", rawUrl, courseName, title, UNIFIED_WORK_URL);
     events.push(makeEvent({
-      id: `assignment_${stableHash(`global-work:${sourceId}`)}`,
+      id: `assignment_${stableHash(sourceId)}`,
       kind: "assignment",
       title,
       summary: [courseName, status || "未完成", remaining].filter(Boolean).join(" · "),
@@ -435,9 +482,9 @@ function parseGlobalExamPage(
     if (!title) return;
     const deadline = parseTaskDeadline(`${timing} ${item.text()}`, now);
     const url = safeChaoxingUrl(rawUrl, UNIFIED_EXAM_URL) ?? UNIFIED_EXAM_URL;
-    const sourceId = rawUrl || `${courseName}:${title}`;
+    const sourceId = stableTaskSourceId("exam", rawUrl, courseName, title, UNIFIED_EXAM_URL);
     events.push(makeEvent({
-      id: `exam_${stableHash(`global-exam:${sourceId}`)}`,
+      id: `exam_${stableHash(sourceId)}`,
       kind: "exam",
       title,
       summary: [courseName, status || "待完成", timing].filter(Boolean).join(" · "),

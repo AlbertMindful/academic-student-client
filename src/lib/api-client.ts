@@ -146,10 +146,10 @@ export const api = {
   getEventStates(): Promise<{ enabled: boolean; states: Record<string, AcademicEventState> }> {
     return request("/api/preferences", undefined, 10_000);
   },
-  putEventStates(states: Record<string, AcademicEventState>): Promise<{ enabled: boolean; ok: boolean }> {
+  putEventStates(states: Record<string, AcademicEventState>): Promise<{ enabled: boolean; ok: boolean; states: Record<string, AcademicEventState> }> {
     return request("/api/preferences", {
       method: "PUT",
-      body: JSON.stringify({ states }),
+      body: JSON.stringify({ states, mode: "mutation" }),
     }, 10_000);
   },
   startChaoxingConnection(): Promise<{ pendingId: string }> {
