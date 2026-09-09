@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, History, MapPin, Armchair } from "lucide-react";
+import { CalendarClock, CalendarPlus, History, MapPin, Armchair } from "lucide-react";
 import type { Exam } from "@/lib/types";
 import { api } from "@/lib/api-client";
 import { useApi } from "@/hooks/use-api";
@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/card";
 import { examCountdown, fullDateCN } from "@/lib/format";
 import { isOfficialSpecialExam } from "@/lib/exams";
+import { downloadCalendarFile, examCalendarFile } from "@/lib/calendar-export";
+import { Button } from "@/components/ui/button";
 
 function todayIso(): string {
   const d = new Date();
@@ -40,11 +42,17 @@ export default function ExamsPage() {
     .filter((e) => e.date < today)
     .sort((a, b) => (a.date > b.date ? -1 : 1));
 
+  function exportExams() {
+    if (!upcoming.length) return;
+    downloadCalendarFile(examCalendarFile(upcoming), "考试安排.ics");
+  }
+
   return (
     <div>
       <PageHeader
         title="考试"
         description="查看考试时间、地点与倒计时"
+        action={<Button variant="outline" onClick={exportExams} disabled={!upcoming.length}><CalendarPlus />导出考试</Button>}
       />
 
       <div className="space-y-8">
