@@ -2,7 +2,7 @@
 
 一个面向学生的个人学业信息中心，将教务系统和学习通里的课程、考试、成绩、作业与通知整理到同一个页面。
 
-在线体验：[academic-student-client.onrender.com](https://academic-student-client.onrender.com)
+在线使用：[academic-student-client.43-132-136-104.sslip.io](https://academic-student-client.43-132-136-104.sslip.io)
 
 ## 能做什么
 
@@ -13,6 +13,13 @@
 - 支持亮色、暗色、手机浏览器和 PWA 安装
 - 提供登录后可跨设备访问的个人云盘，文件保存在自己的服务器上
 - 登录失效时给出重新绑定入口，不会展示已解绑账号的旧数据
+- 提供带桌面小组件的原生 macOS 安装版
+
+## macOS 应用
+
+原生应用同时支持 Apple 芯片与 Intel Mac，要求 macOS 14 或更高版本。它保留网页登录状态，支持云盘上传下载、课程表和考试导出，并附带小号与中号桌面小组件。
+
+构建与签名说明见 [`macos/README.md`](macos/README.md)。
 
 ## 本地运行
 
