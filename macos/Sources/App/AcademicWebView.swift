@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+import WidgetKit
 
 struct AcademicWebView: NSViewRepresentable {
     @ObservedObject var router: AppRouter
@@ -15,6 +16,7 @@ struct AcademicWebView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.preferences.isElementFullscreenEnabled = true
+        configuration.userContentController.add(context.coordinator, name: "academicWidget")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -29,7 +31,11 @@ struct AcademicWebView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) { }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "academicWidget")
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         private let router: AppRouter
         private weak var webView: WKWebView?
         private var cancellable: AnyCancellable?
@@ -43,6 +49,19 @@ struct AcademicWebView: NSViewRepresentable {
             cancellable = router.$request.dropFirst().sink { [weak webView] request in
                 webView?.load(request)
             }
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard
+                message.name == "academicWidget",
+                let json = message.body as? String,
+                let data = json.data(using: .utf8),
+                data.count < 64_000,
+                let snapshot = try? JSONDecoder().decode(TodaySnapshot.self, from: data)
+            else { return }
+
+            TodaySnapshotStore.save(snapshot)
+            WidgetCenter.shared.reloadTimelines(ofKind: "AcademicCenterWidget")
         }
 
         func webView(

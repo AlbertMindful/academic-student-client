@@ -44,13 +44,14 @@ WIDGET_INTEL="$WORK_DIR/AcademicCenterWidget-x86_64"
 
 APP_SOURCES=("$SCRIPT_DIR"/Sources/App/*.swift)
 WIDGET_SOURCES=("$SCRIPT_DIR"/Sources/Widget/*.swift)
+SHARED_SOURCES=("$SCRIPT_DIR"/Sources/Shared/*.swift)
 
-build_binary arm64 "$APP_ARM" "${APP_SOURCES[@]}" -framework SwiftUI -framework AppKit -framework WebKit -framework UniformTypeIdentifiers
-build_binary x86_64 "$APP_INTEL" "${APP_SOURCES[@]}" -framework SwiftUI -framework AppKit -framework WebKit -framework UniformTypeIdentifiers
+build_binary arm64 "$APP_ARM" "${APP_SOURCES[@]}" "${SHARED_SOURCES[@]}" -framework SwiftUI -framework AppKit -framework WebKit -framework WidgetKit -framework UniformTypeIdentifiers
+build_binary x86_64 "$APP_INTEL" "${APP_SOURCES[@]}" "${SHARED_SOURCES[@]}" -framework SwiftUI -framework AppKit -framework WebKit -framework WidgetKit -framework UniformTypeIdentifiers
 lipo -create "$APP_ARM" "$APP_INTEL" -output "$APP_EXECUTABLE"
 
-build_binary arm64 "$WIDGET_ARM" "${WIDGET_SOURCES[@]}" -application-extension -framework SwiftUI -framework WidgetKit
-build_binary x86_64 "$WIDGET_INTEL" "${WIDGET_SOURCES[@]}" -application-extension -framework SwiftUI -framework WidgetKit
+build_binary arm64 "$WIDGET_ARM" "${WIDGET_SOURCES[@]}" "${SHARED_SOURCES[@]}" -application-extension -framework SwiftUI -framework WidgetKit
+build_binary x86_64 "$WIDGET_INTEL" "${WIDGET_SOURCES[@]}" "${SHARED_SOURCES[@]}" -application-extension -framework SwiftUI -framework WidgetKit
 lipo -create "$WIDGET_ARM" "$WIDGET_INTEL" -output "$WIDGET_EXECUTABLE"
 
 codesign --force --sign - --timestamp=none --entitlements "$SCRIPT_DIR/Resources/Widget.entitlements" "$WIDGET_BUNDLE"
