@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   User,
   Database,
+  HardDrive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
@@ -48,6 +49,7 @@ const MORE_NAV = [
   { href: "/grades", label: "成绩", icon: ChartNoAxesColumn },
   { href: "/exams", label: "考试", icon: ClipboardList },
   { href: "/insights", label: "学业洞察", icon: Compass },
+  { href: "/drive", label: "云盘", icon: HardDrive },
   { href: "/data", label: "数据来源", icon: Database },
 ];
 

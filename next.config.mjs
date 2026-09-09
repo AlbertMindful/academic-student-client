@@ -7,6 +7,7 @@ const appPages = [
   "/grades",
   "/exams",
   "/insights",
+  "/drive",
   "/data",
   "/login",
 ];
