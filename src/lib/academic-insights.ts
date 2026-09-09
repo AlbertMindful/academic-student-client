@@ -1,4 +1,5 @@
 import type { CourseSchedule, Exam } from "@/lib/types";
+export { examCalendarFile } from "@/lib/calendar-export";
 import { PERIODS } from "@/lib/periods";
 
 export const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -70,23 +71,4 @@ export function requiredGpa(
 ): number {
   if (plannedCredits <= 0) return 0;
   return (targetGpa * (currentCredits + plannedCredits) - currentGpa * currentCredits) / plannedCredits;
-}
-
-export function examCalendarFile(exams: Exam[]): string {
-  const escape = (value: string) => value.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const time = (date: string, value?: string) =>
-    `${date.replaceAll("-", "")}${value ? `T${value.replace(":", "")}00` : ""}`;
-  const events = upcomingExams(exams).map((exam) => [
-    "BEGIN:VEVENT",
-    `UID:${escape(exam.id)}@academic-assistant`,
-    `DTSTAMP:${stamp}`,
-    `DTSTART:${time(exam.date, exam.startTime)}`,
-    `DTEND:${time(exam.date, exam.endTime ?? exam.startTime)}`,
-    `SUMMARY:${escape(`${exam.courseName}考试`)}`,
-    `LOCATION:${escape(exam.location || "待定")}`,
-    exam.seatNumber ? `DESCRIPTION:${escape(`座位号 ${exam.seatNumber}`)}` : "",
-    "END:VEVENT",
-  ].filter(Boolean).join("\r\n"));
-  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Academic Assistant//CN", ...events, "END:VCALENDAR"].join("\r\n");
 }

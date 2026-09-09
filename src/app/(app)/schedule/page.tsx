@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useApi } from "@/hooks/use-api";
 import { PageHeader } from "@/components/page-header";
@@ -20,6 +20,7 @@ import {
 import { computeTeachingWeek, teachingWeekLabel } from "@/lib/teaching-week";
 import { isoDayOfWeek, sortSessionsChronologically } from "@/lib/schedule";
 import type { CourseSchedule } from "@/lib/types";
+import { downloadCalendarFile, scheduleCalendarFile } from "@/lib/calendar-export";
 
 const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
@@ -36,6 +37,9 @@ export default function SchedulePage() {
 
   const currentSemester =
     semesters.data?.find((s) => s.isCurrent) ?? semesters.data?.[0];
+  const selectedSemester = semesterId === "__current__"
+    ? currentSemester
+    : semesters.data?.find((semester) => semester.id === semesterId);
   const baseWeek = currentSemester?.startDate
     ? computeTeachingWeek(currentSemester.startDate, new Date())
     : 1;
@@ -47,29 +51,31 @@ export default function SchedulePage() {
 
   const courses = schedule.data ?? [];
 
+  function exportSchedule() {
+    if (!selectedSemester || !courses.length) return;
+    downloadCalendarFile(scheduleCalendarFile(courses, selectedSemester.startDate), `${selectedSemester.name}课表.ics`);
+  }
+
   return (
     <div>
       <PageHeader
         title="课表"
-        description={
-          currentSemester ? currentSemester.name : "查看每周课程安排"
-        }
+        description={selectedSemester ? selectedSemester.name : "查看每周课程安排"}
         action={
-          <select
-            value={semesterId}
-            onChange={(e) => {
-              setSemesterId(e.target.value);
-              setWeekOffset(0);
-            }}
-            className="h-9 rounded-md border bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="__current__">当前学期</option>
-            {(semesters.data ?? []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={exportSchedule} disabled={!selectedSemester || !courses.length}><CalendarPlus />导出课表</Button>
+            <select
+              value={semesterId}
+              onChange={(e) => {
+                setSemesterId(e.target.value);
+                setWeekOffset(0);
+              }}
+              className="h-9 rounded-md border bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="__current__">当前学期</option>
+              {(semesters.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
         }
       />
 
