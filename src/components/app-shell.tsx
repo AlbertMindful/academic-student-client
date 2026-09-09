@@ -9,7 +9,6 @@ import {
   ChartNoAxesColumn,
   ClipboardList,
   Compass,
-  GraduationCap,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -29,6 +28,7 @@ import { PwaInstallButton } from "@/components/pwa-install-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AppMark } from "@/components/app-mark";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,9 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* 桌面侧边栏 */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border/70 bg-card/70 backdrop-blur-2xl md:flex">
         <div className="flex items-center gap-3 px-5 py-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background">
-            <GraduationCap className="h-[18px] w-[18px]" />
-          </div>
+          <AppMark className="h-9 w-9 shadow-sm" />
           <div>
             <span className="block text-sm font-semibold tracking-tight">学业中心</span>
           </div>

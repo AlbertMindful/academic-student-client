@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, GraduationCap } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { LoginForm } from "@/components/login-form";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AppMark } from "@/components/app-mark";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +24,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-sm page-enter">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_30px_hsl(var(--primary)/.28)]">
-            <GraduationCap className="h-6 w-6" />
-          </div>
+          <AppMark className="h-12 w-12 shadow-[0_12px_30px_hsl(var(--primary)/.28)]" />
           <div>
             <h1 className="text-xl font-semibold tracking-[-0.035em]">个人学业中心</h1>
             <p className="mt-1 text-sm text-muted-foreground">
