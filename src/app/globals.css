@@ -56,10 +56,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
-    background-image:
-      radial-gradient(circle at 84% -8%, hsl(var(--primary) / .055), transparent 25rem),
-      radial-gradient(circle at -8% 92%, hsl(266 74% 64% / .035), transparent 28rem);
-    background-attachment: fixed;
+    background-image: none;
   }
   html {
     -webkit-font-smoothing: antialiased;
@@ -69,7 +66,7 @@
 
 @layer utilities {
   .surface {
-    @apply border border-white/80 bg-card/[.88] shadow-[0_1px_2px_rgba(15,23,42,0.025),0_14px_36px_rgba(15,23,42,0.045)] backdrop-blur-xl dark:border-white/[0.07];
+    @apply border border-white/70 bg-card/85 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_12px_32px_rgba(15,23,42,0.04)] backdrop-blur-xl dark:border-white/[0.07];
   }
   .page-enter {
     animation: page-enter 520ms cubic-bezier(.22, 1, .36, 1) both;
