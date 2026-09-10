@@ -104,8 +104,16 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
     const response = await connection.client.get(CHAOXING_USER_INFO);
     const body = JSON.parse(response.body) as unknown;
     const message = record(record(body).msg);
-    const imAccount = record(record(message.accountInfo).imAccount);
-    const username = textValue(imAccount.username, message.uid);
+    const accountInfo = record(message.accountInfo);
+    const imAccount = record(accountInfo.imAccount);
+    // The current Chaoxing client authenticates Easemob with the Chaoxing UID.
+    // The IM username is not interchangeable for every account.
+    const username = textValue(
+      message.uid,
+      accountInfo.uid,
+      imAccount.username,
+      connection.cookieValue("UID", CHAOXING_USER_INFO),
+    );
     const encryptedPassword = textValue(imAccount.password);
     const password = encryptedPassword ? decryptImPassword(encryptedPassword) : undefined;
     if (!username || !password) return null;
