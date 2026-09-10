@@ -8,6 +8,7 @@ import type {
   AcademicSyncPayload,
   AcademicEventState,
 } from "@/lib/types";
+import type { ChaoxingChatDetailPayload, ChaoxingChatsPayload } from "@/lib/chaoxing-chat-types";
 
 export interface ApiErrorBody {
   code: string;
@@ -163,5 +164,11 @@ export const api = {
   },
   disconnectChaoxing(): Promise<{ connected: boolean }> {
     return request("/api/chaoxing/session", { method: "DELETE" });
+  },
+  getChaoxingChats(): Promise<ChaoxingChatsPayload> {
+    return request("/api/chaoxing/chats", { cache: "no-store" }, 25_000);
+  },
+  getChaoxingChat(groupId: string): Promise<ChaoxingChatDetailPayload> {
+    return request(`/api/chaoxing/chats/${encodeURIComponent(groupId)}`, { cache: "no-store" }, 30_000);
   },
 };

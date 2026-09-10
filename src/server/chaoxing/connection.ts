@@ -96,6 +96,7 @@ export async function pollChaoxingConnection(id: string): Promise<
 
 export interface ChaoxingConnection {
   client: SchoolHttpClient;
+  cookieValue: (name: string, url: string) => string | undefined;
   refreshedToken: () => string;
 }
 
@@ -105,6 +106,7 @@ export function chaoxingConnectionFromToken(token?: string): ChaoxingConnection 
   const jar = CookieJar.fromJSON(payload.cookies);
   return {
     client: new SchoolHttpClient(jar),
+    cookieValue: (name, url) => jar.getCookieValue(name, url),
     refreshedToken: () => sealChaoxingSession({
       version: 1,
       cookies: jar.toJSON(),
