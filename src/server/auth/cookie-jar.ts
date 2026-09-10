@@ -150,6 +150,21 @@ export class CookieJar {
     return matched.map((c) => `${c.name}=${c.value}`).join("; ");
   }
 
+  /** 服务端读取某个请求上下文中可见的 Cookie；不得将返回值发送到浏览器。 */
+  getCookieValue(name: string, url: string): string | undefined {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    const path = u.pathname || "/";
+    this.purgeExpired();
+    return this.cookies
+      .filter((cookie) =>
+        cookie.name === name &&
+        domainMatches(cookie.domain, host) &&
+        pathMatches(cookie.path, path),
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0]?.value;
+  }
+
   clear(): void {
     this.cookies = [];
   }

@@ -18,6 +18,7 @@ import {
   User,
   Database,
   HardDrive,
+  MessagesSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
@@ -46,6 +47,7 @@ const PRIMARY_NAV = [
 ];
 
 const MORE_NAV = [
+  { href: "/messages", label: "学习通消息", icon: MessagesSquare },
   { href: "/grades", label: "成绩", icon: ChartNoAxesColumn },
   { href: "/exams", label: "考试", icon: ClipboardList },
   { href: "/insights", label: "学业洞察", icon: Compass },
