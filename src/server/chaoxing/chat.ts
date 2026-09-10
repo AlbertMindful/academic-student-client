@@ -117,11 +117,12 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
     const encryptedPassword = textValue(imAccount.password);
     const password = encryptedPassword ? decryptImPassword(encryptedPassword) : undefined;
     if (!username || !password) return null;
+    const tokenUsername = /^\d+$/.test(username) ? Number(username) : username;
     const tokenResponse = await fetch(`${EASEMOB_AUTH_API}/token`, {
       method: "POST",
       cache: "no-store",
       headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": EASEMOB_USER_AGENT },
-      body: JSON.stringify({ grant_type: "password", username, password }),
+      body: JSON.stringify({ grant_type: "password", username: tokenUsername, password }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!tokenResponse.ok) return null;
