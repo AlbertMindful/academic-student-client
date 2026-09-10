@@ -12,6 +12,9 @@ import { serverConfig } from "@/server/config";
 
 const IM_HOME = "https://im.chaoxing.com/webim/me";
 const EASEMOB_API = "https://a1-vip6.easecdn.com/cx-dev/cxstudy";
+const EASEMOB_AUTH_API = "https://a1-vip6.easemob.com/cx-dev/cxstudy";
+const CHAOXING_USER_INFO = "https://sso.chaoxing.com/apis/login/userLogin4Uname.do";
+const EASEMOB_USER_AGENT = "Easemob-SDK(Android) 4.9.0.1";
 const MAX_MESSAGES = 80;
 
 export class ChaoxingChatError extends Error {
@@ -78,7 +81,33 @@ function safeDate(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCredentials | null> {
+  try {
+    const response = await connection.client.get(CHAOXING_USER_INFO);
+    const body = JSON.parse(response.body) as unknown;
+    const message = record(record(body).msg);
+    const imAccount = record(record(message.accountInfo).imAccount);
+    const username = textValue(imAccount.username, message.uid);
+    const password = textValue(imAccount.password);
+    if (!username || !password) return null;
+    const tokenResponse = await fetch(`${EASEMOB_AUTH_API}/token`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": EASEMOB_USER_AGENT },
+      body: JSON.stringify({ grant_type: "password", username, password }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!tokenResponse.ok) return null;
+    const tokenBody = record(await tokenResponse.json() as unknown);
+    const token = textValue(tokenBody.access_token);
+    const uid = textValue(record(tokenBody.user).username, username);
+    return token && uid ? { token, uid } : null;
+  } catch { return null; }
+}
+
 async function imCredentials(connection: ChaoxingConnection): Promise<ImCredentials> {
+  const modern = await modernImCredentials(connection);
+  if (modern) return modern;
   const response = await connection.client.get(IM_HOME);
   const lowerUrl = response.url.toLowerCase();
   if (lowerUrl.includes("passport2.chaoxing.com") || /用户登录|loginform|name=["']uname/i.test(response.body)) {
@@ -139,7 +168,9 @@ function normalizeGroup(value: unknown): ChaoxingChatGroup | null {
 
 export async function getChaoxingChatGroups(connection: ChaoxingConnection): Promise<ChaoxingChatGroup[]> {
   const credentials = await imCredentials(connection);
-  const response = await easemob(`/users/${encodeURIComponent(credentials.uid)}/joined_chatgroups`, credentials.token);
+  const response = await easemob(`${EASEMOB_AUTH_API}/users/${encodeURIComponent(credentials.uid)}/joined_chatgroups?detail=true&version=v3&pagenum=1&pagesize=200`, credentials.token, {
+    headers: { "User-Agent": EASEMOB_USER_AGENT },
+  });
   const body = await response.json() as unknown;
   const groups = listFrom(body, ["entities", "groups", "chatgroups"])
     .map(normalizeGroup)
