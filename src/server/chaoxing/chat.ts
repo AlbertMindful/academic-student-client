@@ -15,6 +15,7 @@ const EASEMOB_API = "https://a1-vip6.easecdn.com/cx-dev/cxstudy";
 const EASEMOB_AUTH_API = "https://a1-vip6.easemob.com/cx-dev/cxstudy";
 const CHAOXING_USER_INFO = "https://sso.chaoxing.com/apis/login/userLogin4Uname.do";
 const EASEMOB_USER_AGENT = "Easemob-SDK(Android) 4.9.0.1";
+const IM_PASSWORD_KEY = Buffer.from("SL2(M/eD", "utf8");
 const MAX_MESSAGES = 80;
 
 export class ChaoxingChatError extends Error {
@@ -81,6 +82,23 @@ function safeDate(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function decryptImPassword(encrypted: string): string | undefined {
+  if (!/^[0-9a-f]+$/i.test(encrypted) || encrypted.length % 2 !== 0) return undefined;
+  try {
+    // DES-EDE3 with the same key repeated three times is equivalent to single DES.
+    // This keeps compatibility with Node's OpenSSL 3 build, where des-ecb is disabled.
+    const key = Buffer.concat([IM_PASSWORD_KEY, IM_PASSWORD_KEY, IM_PASSWORD_KEY]);
+    const decipher = crypto.createDecipheriv("des-ede3", key, null);
+    decipher.setAutoPadding(true);
+    return Buffer.concat([
+      decipher.update(Buffer.from(encrypted, "hex")),
+      decipher.final(),
+    ]).toString("utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCredentials | null> {
   try {
     const response = await connection.client.get(CHAOXING_USER_INFO);
@@ -88,7 +106,8 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
     const message = record(record(body).msg);
     const imAccount = record(record(message.accountInfo).imAccount);
     const username = textValue(imAccount.username, message.uid);
-    const password = textValue(imAccount.password);
+    const encryptedPassword = textValue(imAccount.password);
+    const password = encryptedPassword ? decryptImPassword(encryptedPassword) : undefined;
     if (!username || !password) return null;
     const tokenResponse = await fetch(`${EASEMOB_AUTH_API}/token`, {
       method: "POST",
