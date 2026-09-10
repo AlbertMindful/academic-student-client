@@ -174,12 +174,32 @@ async function easemob(path: string, token: string, init?: RequestInit): Promise
 }
 
 function normalizeGroup(value: unknown): ChaoxingChatGroup | null {
-  const item = record(value);
-  const id = textValue(item.groupid, item.groupId, item.id, item.chatGroupId);
+  const raw = record(value);
+  const nested = record(raw.group ?? raw.chatgroup ?? raw.chatGroup ?? raw.groupInfo);
+  const item = Object.keys(nested).length > 0 ? { ...raw, ...nested } : raw;
+  const id = textValue(
+    item.groupid,
+    item.groupId,
+    item.group_id,
+    item.chatgroupid,
+    item.chatGroupId,
+    item.chat_group_id,
+    item.gid,
+    item.id,
+  );
   if (!id) return null;
   return {
     id,
-    name: textValue(item.groupname, item.groupName, item.name, item.title) ?? `群聊 ${id.slice(-6)}`,
+    name: textValue(
+      item.groupname,
+      item.groupName,
+      item.group_name,
+      item.chatgroupname,
+      item.chatGroupName,
+      item.chat_group_name,
+      item.name,
+      item.title,
+    ) ?? `群聊 ${id.slice(-6)}`,
     description: textValue(item.description, item.desc),
     memberCount: numberValue(item.affiliations_count, item.affiliationsCount, item.memberCount),
   };
@@ -191,7 +211,7 @@ export async function getChaoxingChatGroups(connection: ChaoxingConnection): Pro
     headers: { "User-Agent": EASEMOB_USER_AGENT },
   });
   const body = await response.json() as unknown;
-  const groups = listFrom(body, ["entities", "groups", "chatgroups"])
+  const groups = listFrom(body, ["entities", "groups", "chatgroups", "list", "results", "rows", "items"])
     .map(normalizeGroup)
     .filter((group): group is ChaoxingChatGroup => Boolean(group));
   return Array.from(new Map(groups.map((group) => [group.id, group])).values())
