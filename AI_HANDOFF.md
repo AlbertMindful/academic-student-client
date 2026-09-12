@@ -31,7 +31,7 @@
 - `src/app/api/`：服务端 API。
 - `src/server/adapters/`：教务数据适配与解析。
 - `src/server/auth/`：登录、会话、凭据加密和 Cookie 管理。
-- `src/server/chaoxing/`：学习通连接、会话及群聊读取。
+- `src/server/chaoxing/`：学习通连接与会话。
 - `src/server/database.ts`：跨设备状态表和读写逻辑。
 - `src/server/drive.ts`：个人云盘容量、文件和磁盘保护逻辑。
 - `src/lib/academic-store.ts`、`src/hooks/use-academic-center.ts`：前端聚合状态和同步。
@@ -47,7 +47,6 @@
 - 个人云盘上传、下载和删除。
 - PWA、响应式布局、亮色/暗色主题。
 - macOS WebView 客户端和安装镜像构建。
-- 只读学习通群聊页面及文件下载接口，但当前生产环境仍未成功取到群列表，详见第 7 节。
 
 ## 4. 数据和安全模型
 
@@ -143,76 +142,9 @@ tail -n 100 app.log
 
 不要在对话中粘贴可能含凭据的完整日志，只提取经过检查的安全字段。
 
-## 7. 当前最重要的未完成事项：学习通群聊
+## 7. 已撤销的学习通群聊功能
 
-### 7.1 用户期望
-
-在系统中查看学习通群聊消息并下载群文件。功能必须只读，不提供发消息、编辑或删除能力。
-
-页面及接口已经存在：
-
-- 页面：`src/app/(app)/messages/page.tsx`
-- 群列表：`src/app/api/chaoxing/chats/route.ts`
-- 群详情：`src/app/api/chaoxing/chats/[groupId]/route.ts`
-- 下载代理：`src/app/api/chaoxing/chats/download/route.ts`
-- 核心协议：`src/server/chaoxing/chat.ts`
-- 类型：`src/lib/chaoxing-chat-types.ts`
-
-已上线相关提交（从早到晚）：
-
-- `ad07bb4 feat: add read-only Chaoxing group messages`
-- `9017bc8 fix: support current Chaoxing IM authentication`
-- `af1c105 fix: decrypt current Chaoxing IM credentials`
-- `0f9207f fix: accept current Chaoxing group formats`
-- `cd2fec6 fix: authenticate Chaoxing IM with UID`
-- `1ae872e fix: send numeric UID to Chaoxing IM`
-
-生产环境当前仍显示“学习通群聊目前正在维护，请稍后再试”。这不是页面缓存问题，而是 `modernImCredentials()` 返回 `null` 后回退到已经停用的旧网页接口，旧接口返回维护提示。
-
-### 7.2 已确认的当前学习通 IM 协议
-
-依据当前学习通 Android 客户端（参考 APK：ChaoxingSignFaker 1.18.1-stable，分析日期 2026-09-10）：
-
-1. 用户信息：`https://sso.chaoxing.com/apis/login/userLogin4Uname.do`
-2. 响应中使用 `msg.uid`（整数）作为环信登录用户名。
-3. 加密密码位于 `msg.accountInfo.imAccount.password`。
-4. 密码算法：`DES/ECB/PKCS5Padding`，密钥 `SL2(M/eD`，密文为十六进制。
-5. Token 地址：`https://a1-vip6.easemob.com/cx-dev/cxstudy/token`
-6. 请求头包含：
-   - `Content-Type: application/x-www-form-urlencoded`
-   - `User-Agent: Easemob-SDK(Android) 4.9.0.1`
-7. 请求体实际上是 JSON：`grant_type=password`、数字类型 `username=msg.uid`、解密后的 `password`。
-8. Token 响应使用 `access_token` 和 `user.username`。
-9. 群列表：`/users/{user.username}/joined_chatgroups?detail=true&version=v3&pagenum=1&pagesize=200`
-10. 群列表位于顶层 `data` 数组；群 ID 为 `id`；名称优先 `name`，可回退到 `description` JSON 中的 `courseInfo.coursename`。
-
-当前实现已经覆盖以上大部分格式，因此需要通过安全诊断确认到底失败在用户信息、解密、Token 请求还是 Token 响应解析。
-
-### 7.3 已提交的安全诊断
-
-提交 `67ccb38` 已在 `src/server/chaoxing/chat.ts` 中加入前缀为 `[chaoxing-im]` 的安全诊断。它只记录：
-
-- 各级 JSON 对象的键名。
-- HTTP 状态和 Content-Type。
-- 用户名/密码字段是否存在、字段类型及长度。
-- 密文是否为十六进制。
-- Token 响应对象键名。
-- 异常类型和截断后的错误信息。
-
-它不记录账号值、UID 值、Cookie、密文、明文密码、Token 或聊天内容。该提交已推送到 `origin/main`；是否已部署到生产环境需要先在服务器执行 `git rev-parse --short HEAD` 核对。
-
-建议接手步骤：
-
-1. 在腾讯云项目目录拉取、构建并按第 6 节重启。
-2. 让已登录用户打开“学习通消息”并点击重试，以触发接口。
-3. 在 `app.log` 中只检查 `[chaoxing-im]` 行。
-4. 根据最后成功阶段修复：
-   - `credentials-missing`：用户信息结构、登录态或密码解密问题。
-   - Token 返回 400/401：请求格式、UID 类型或凭据问题。
-   - `token-fields-missing`：Token 响应结构变化。
-   - Token 成功后群请求失败：群接口主机、授权头或用户标识问题。
-5. 修复完成后移除过于详细的临时诊断，只保留不会泄露信息的必要失败日志。
-6. 只有在真实账号页面能显示群列表后才可宣告完成。
+学习通网页版只返回脱敏后的群聊密码，无法通过安全、稳定的方式获取只读群聊数据。用户已决定删除该功能。群聊页面、导航入口、接口、下载代理、协议实现和专用类型均已移除；不要在没有新的官方网页接口时恢复它。课程、作业、考试等现有学习通同步不受影响。
 
 ## 8. macOS 客户端状态
 
@@ -264,11 +196,10 @@ git status --short --branch
 - 学习通重新绑定及连接过期提示。
 - 云盘上传、下载、删除、配额和磁盘保留空间。
 - macOS App 内上传下载、课程表/考试导出，不应重复申请跨应用数据权限。
-- 学习通群聊只读、群文件下载、登录过期和上游失败提示。
 
 ## 11. 协作边界
 
-- 用户已明确允许针对本次学习通群聊兼容修复提交并推送 GitHub，并更新上述腾讯云服务器；不要把这份授权扩展到无关基础设施或破坏性操作。
+- 用户要求服务器操作由本人执行；只提供经过核对的部署步骤，不直接操作腾讯云服务器。
 - 付款、购买、账号验证、验证码和敏感登录步骤应交给用户本人完成。
 - 修改生产前先本地构建；部署后必须做真实页面验证。
 - 不要清理用户的未跟踪文件，不要 `git reset --hard`，不要强推。
