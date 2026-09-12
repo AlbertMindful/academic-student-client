@@ -97,11 +97,24 @@ export async function writeEventStates(
     state: AcademicEventState;
     updated_at: Date;
   }>>`
-    INSERT INTO academic_event_states (owner_key, event_id, state, updated_at)
-    VALUES (${ownerKey}, ${eventId}, ${JSON.stringify(state)}::jsonb, CURRENT_TIMESTAMP)
-    ON CONFLICT (owner_key, event_id) DO UPDATE
-    SET state = EXCLUDED.state, updated_at = CURRENT_TIMESTAMP
-    RETURNING event_id, state, updated_at
+    WITH accepted AS (
+      INSERT INTO academic_event_states (owner_key, event_id, state, updated_at)
+      VALUES (${ownerKey}, ${eventId}, ${JSON.stringify(state)}::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (owner_key, event_id) DO UPDATE
+      SET state = EXCLUDED.state, updated_at = CURRENT_TIMESTAMP
+      WHERE COALESCE(
+        NULLIF(academic_event_states.state->>'updatedAt', '')::timestamptz,
+        academic_event_states.updated_at
+      ) <= ${state.updatedAt}::timestamptz
+      RETURNING event_id, state, updated_at
+    )
+    SELECT event_id, state, updated_at FROM accepted
+    UNION ALL
+    SELECT event_id, state, updated_at
+    FROM academic_event_states
+    WHERE owner_key = ${ownerKey}
+      AND event_id = ${eventId}
+      AND NOT EXISTS (SELECT 1 FROM accepted)
   `));
   return Object.fromEntries(batches.flat().map((row) => [row.event_id, {
     ...row.state,
