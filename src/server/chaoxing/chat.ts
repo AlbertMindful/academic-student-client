@@ -20,7 +20,7 @@ const MAX_MESSAGES = 80;
 
 export class ChaoxingChatError extends Error {
   constructor(
-    public code: "CHAOXING_REAUTH_REQUIRED" | "CHAT_UNAVAILABLE" | "UPSTREAM_ERROR" | "INVALID_DOWNLOAD",
+    public code: "CHAOXING_REAUTH_REQUIRED" | "CHAT_WEB_UNAVAILABLE" | "CHAT_UNAVAILABLE" | "UPSTREAM_ERROR" | "INVALID_DOWNLOAD",
     message: string,
     public status = 502,
   ) {
@@ -42,14 +42,6 @@ interface DownloadReference {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function objectKeys(value: unknown): string[] {
-  return Object.keys(record(value)).sort();
-}
-
-function logImDiagnostic(stage: string, details: Record<string, unknown>): void {
-  console.warn("[chaoxing-im]", stage, details);
 }
 
 function textValue(...values: unknown[]): string | undefined {
@@ -124,20 +116,14 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
     );
     const encryptedPassword = textValue(imAccount.password);
     const password = encryptedPassword ? decryptImPassword(encryptedPassword) : undefined;
-    logImDiagnostic("user-info", {
-      httpStatus: response.status,
-      bodyKeys: objectKeys(body),
-      messageKeys: objectKeys(message),
-      accountInfoKeys: objectKeys(accountInfo),
-      imAccountKeys: objectKeys(imAccount),
-      hasUsername: Boolean(username),
-      usernameType: typeof message.uid,
-      encryptedPasswordLength: encryptedPassword?.length ?? 0,
-      encryptedPasswordIsHex: Boolean(encryptedPassword && /^[0-9a-f]+$/i.test(encryptedPassword)),
-      decryptedPasswordLength: password?.length ?? 0,
-    });
+    if (encryptedPassword && /^\*{4,}$/.test(encryptedPassword)) {
+      throw new ChaoxingChatError(
+        "CHAT_WEB_UNAVAILABLE",
+        "学习通没有向网页版提供群聊读取凭据，请暂时使用学习通客户端查看消息。",
+        503,
+      );
+    }
     if (!username || !password) {
-      logImDiagnostic("credentials-missing", { hasUsername: Boolean(username), hasPassword: Boolean(password) });
       return null;
     }
     const tokenUsername = /^\d+$/.test(username) ? Number(username) : username;
@@ -156,25 +142,12 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
       tokenPayload = null;
     }
     const tokenBody = record(tokenPayload);
-    logImDiagnostic("token-response", {
-      httpStatus: tokenResponse.status,
-      contentType: tokenResponse.headers.get("content-type"),
-      bodyKeys: objectKeys(tokenBody),
-      userKeys: objectKeys(tokenBody.user),
-      responseLength: tokenText.length,
-    });
     if (!tokenResponse.ok) return null;
     const token = textValue(tokenBody.access_token);
     const uid = textValue(record(tokenBody.user).username, username);
-    if (!token || !uid) {
-      logImDiagnostic("token-fields-missing", { hasToken: Boolean(token), hasUid: Boolean(uid) });
-    }
     return token && uid ? { token, uid } : null;
   } catch (cause) {
-    logImDiagnostic("exception", {
-      name: cause instanceof Error ? cause.name : typeof cause,
-      message: cause instanceof Error ? cause.message.slice(0, 240) : "Unknown error",
-    });
+    if (cause instanceof ChaoxingChatError) throw cause;
     return null;
   }
 }
@@ -300,23 +273,8 @@ export async function getChaoxingChatGroups(connection: ChaoxingConnection): Pro
   try {
     body = JSON.parse(rawText) as unknown;
   } catch {
-    logImDiagnostic("group-list", {
-      httpStatus: response.status,
-      contentType: response.headers.get("content-type"),
-      parseError: true,
-      responseLength: rawText.length,
-    });
     throw new ChaoxingChatError("UPSTREAM_ERROR", "学习通群聊暂时无法访问，请稍后重试。", 502);
   }
-  const data = record(body).data;
-  logImDiagnostic("group-list", {
-    httpStatus: response.status,
-    contentType: response.headers.get("content-type"),
-    bodyKeys: objectKeys(body),
-    dataIsArray: Array.isArray(data),
-    dataLength: Array.isArray(data) ? data.length : 0,
-    firstItemKeys: objectKeys(Array.isArray(data) && data.length ? data[0] : undefined),
-  });
   const groups = listFrom(body, ["entities", "groups", "chatgroups", "list", "results", "rows", "items"])
     .map(normalizeGroup)
     .filter((group): group is ChaoxingChatGroup => Boolean(group));
