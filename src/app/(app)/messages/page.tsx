@@ -47,7 +47,7 @@ export default function MessagesPage() {
   const [query, setQuery] = React.useState("");
   const [loadingGroups, setLoadingGroups] = React.useState(true);
   const [loadingDetail, setLoadingDetail] = React.useState(false);
-  const [error, setError] = React.useState<{ message: string; reconnect: boolean } | null>(null);
+  const [error, setError] = React.useState<{ message: string; reconnect: boolean; webUnavailable: boolean } | null>(null);
 
   const loadGroups = React.useCallback(async () => {
     setLoadingGroups(true);
@@ -61,6 +61,7 @@ export default function MessagesPage() {
       setError({
         message: cause instanceof Error ? cause.message : "学习通群聊暂时无法访问。",
         reconnect: cause instanceof ApiError && ["NOT_CONNECTED", "CHAOXING_REAUTH_REQUIRED"].includes(cause.code),
+        webUnavailable: cause instanceof ApiError && cause.code === "CHAT_WEB_UNAVAILABLE",
       });
     } finally { setLoadingGroups(false); }
   }, []);
@@ -75,6 +76,7 @@ export default function MessagesPage() {
       setError({
         message: cause instanceof Error ? cause.message : "群聊消息暂时无法读取。",
         reconnect: cause instanceof ApiError && ["NOT_CONNECTED", "CHAOXING_REAUTH_REQUIRED"].includes(cause.code),
+        webUnavailable: cause instanceof ApiError && cause.code === "CHAT_WEB_UNAVAILABLE",
       });
     } finally { setLoadingDetail(false); }
   }, []);
@@ -105,6 +107,8 @@ export default function MessagesPage() {
           <span>{error.message}</span>
           {error.reconnect
             ? <Button asChild size="sm" variant="outline"><Link href="/data">重新连接</Link></Button>
+            : error.webUnavailable
+              ? <Button asChild size="sm" variant="outline"><a href="https://apps.chaoxing.com/t" target="_blank" rel="noreferrer">打开学习通客户端</a></Button>
             : <Button size="sm" variant="ghost" onClick={() => selectedId ? void loadDetail(selectedId) : void loadGroups()}><RefreshCw />重试</Button>}
         </div>
       )}
