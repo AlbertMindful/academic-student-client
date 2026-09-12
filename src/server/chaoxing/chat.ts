@@ -44,6 +44,14 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function objectKeys(value: unknown): string[] {
+  return Object.keys(record(value)).sort();
+}
+
+function logImDiagnostic(stage: string, details: Record<string, unknown>): void {
+  console.warn("[chaoxing-im]", stage, details);
+}
+
 function textValue(...values: unknown[]): string | undefined {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -116,7 +124,22 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
     );
     const encryptedPassword = textValue(imAccount.password);
     const password = encryptedPassword ? decryptImPassword(encryptedPassword) : undefined;
-    if (!username || !password) return null;
+    logImDiagnostic("user-info", {
+      httpStatus: response.status,
+      bodyKeys: objectKeys(body),
+      messageKeys: objectKeys(message),
+      accountInfoKeys: objectKeys(accountInfo),
+      imAccountKeys: objectKeys(imAccount),
+      hasUsername: Boolean(username),
+      usernameType: typeof message.uid,
+      encryptedPasswordLength: encryptedPassword?.length ?? 0,
+      encryptedPasswordIsHex: Boolean(encryptedPassword && /^[0-9a-f]+$/i.test(encryptedPassword)),
+      decryptedPasswordLength: password?.length ?? 0,
+    });
+    if (!username || !password) {
+      logImDiagnostic("credentials-missing", { hasUsername: Boolean(username), hasPassword: Boolean(password) });
+      return null;
+    }
     const tokenUsername = /^\d+$/.test(username) ? Number(username) : username;
     const tokenResponse = await fetch(`${EASEMOB_AUTH_API}/token`, {
       method: "POST",
@@ -125,12 +148,35 @@ async function modernImCredentials(connection: ChaoxingConnection): Promise<ImCr
       body: JSON.stringify({ grant_type: "password", username: tokenUsername, password }),
       signal: AbortSignal.timeout(15_000),
     });
+    const tokenText = await tokenResponse.text();
+    let tokenPayload: unknown;
+    try {
+      tokenPayload = JSON.parse(tokenText) as unknown;
+    } catch {
+      tokenPayload = null;
+    }
+    const tokenBody = record(tokenPayload);
+    logImDiagnostic("token-response", {
+      httpStatus: tokenResponse.status,
+      contentType: tokenResponse.headers.get("content-type"),
+      bodyKeys: objectKeys(tokenBody),
+      userKeys: objectKeys(tokenBody.user),
+      responseLength: tokenText.length,
+    });
     if (!tokenResponse.ok) return null;
-    const tokenBody = record(await tokenResponse.json() as unknown);
     const token = textValue(tokenBody.access_token);
     const uid = textValue(record(tokenBody.user).username, username);
+    if (!token || !uid) {
+      logImDiagnostic("token-fields-missing", { hasToken: Boolean(token), hasUid: Boolean(uid) });
+    }
     return token && uid ? { token, uid } : null;
-  } catch { return null; }
+  } catch (cause) {
+    logImDiagnostic("exception", {
+      name: cause instanceof Error ? cause.name : typeof cause,
+      message: cause instanceof Error ? cause.message.slice(0, 240) : "Unknown error",
+    });
+    return null;
+  }
 }
 
 async function imCredentials(connection: ChaoxingConnection): Promise<ImCredentials> {
@@ -182,6 +228,35 @@ async function easemob(path: string, token: string, init?: RequestInit): Promise
   }
 }
 
+// The current Chaoxing client stores a course group's display name inside the
+// `description` field as a JSON string, e.g. {"courseInfo":{"coursename":"高等数学"}}.
+// Fall back to that only when the group has no direct `name`-like field.
+function nameFromDescription(description: string | undefined): string | undefined {
+  if (!description) return undefined;
+  const trimmed = description.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const source = record(parsed);
+      const courseInfo = record(source.courseInfo ?? source.courseinfo ?? source.course);
+      return textValue(
+        courseInfo.coursename,
+        courseInfo.courseName,
+        courseInfo.name,
+        source.courseName,
+        source.coursename,
+        source.name,
+        source.title,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+  // A short plain-text description is a better label than a bare id suffix.
+  return trimmed.length <= 80 ? trimmed : undefined;
+}
+
 function normalizeGroup(value: unknown): ChaoxingChatGroup | null {
   const raw = record(value);
   const nested = record(raw.group ?? raw.chatgroup ?? raw.chatGroup ?? raw.groupInfo);
@@ -197,6 +272,7 @@ function normalizeGroup(value: unknown): ChaoxingChatGroup | null {
     item.id,
   );
   if (!id) return null;
+  const description = textValue(item.description, item.desc);
   return {
     id,
     name: textValue(
@@ -208,8 +284,8 @@ function normalizeGroup(value: unknown): ChaoxingChatGroup | null {
       item.chat_group_name,
       item.name,
       item.title,
-    ) ?? `群聊 ${id.slice(-6)}`,
-    description: textValue(item.description, item.desc),
+    ) ?? nameFromDescription(description) ?? `群聊 ${id.slice(-6)}`,
+    description,
     memberCount: numberValue(item.affiliations_count, item.affiliationsCount, item.memberCount),
   };
 }
@@ -219,7 +295,28 @@ export async function getChaoxingChatGroups(connection: ChaoxingConnection): Pro
   const response = await easemob(`${EASEMOB_AUTH_API}/users/${encodeURIComponent(credentials.uid)}/joined_chatgroups?detail=true&version=v3&pagenum=1&pagesize=200`, credentials.token, {
     headers: { "User-Agent": EASEMOB_USER_AGENT },
   });
-  const body = await response.json() as unknown;
+  const rawText = await response.text();
+  let body: unknown = null;
+  try {
+    body = JSON.parse(rawText) as unknown;
+  } catch {
+    logImDiagnostic("group-list", {
+      httpStatus: response.status,
+      contentType: response.headers.get("content-type"),
+      parseError: true,
+      responseLength: rawText.length,
+    });
+    throw new ChaoxingChatError("UPSTREAM_ERROR", "学习通群聊暂时无法访问，请稍后重试。", 502);
+  }
+  const data = record(body).data;
+  logImDiagnostic("group-list", {
+    httpStatus: response.status,
+    contentType: response.headers.get("content-type"),
+    bodyKeys: objectKeys(body),
+    dataIsArray: Array.isArray(data),
+    dataLength: Array.isArray(data) ? data.length : 0,
+    firstItemKeys: objectKeys(Array.isArray(data) && data.length ? data[0] : undefined),
+  });
   const groups = listFrom(body, ["entities", "groups", "chatgroups", "list", "results", "rows", "items"])
     .map(normalizeGroup)
     .filter((group): group is ChaoxingChatGroup => Boolean(group));
