@@ -70,7 +70,7 @@ class SessionStore {
     if (!record) return undefined;
     const now = Date.now();
     if (record.expiresAt <= now) {
-      this.sessions.delete(id);
+      this.sessions.delete(recordId);
       return undefined;
     }
     record.lastUsedAt = now;
