@@ -39,8 +39,18 @@ export async function GET(req: NextRequest) {
     let end = info.size - 1;
     let status = 200;
     if (range) {
-      start = range[1] ? Number(range[1]) : 0;
-      end = range[2] ? Number(range[2]) : end;
+      if (range[1] === "" && range[2] !== "") {
+        // Suffix range `bytes=-N` requests the last N bytes, not 0..N.
+        const suffixLength = Number(range[2]);
+        if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+          return new NextResponse(null, { status: 416, headers: { "Content-Range": `bytes */${info.size}` } });
+        }
+        start = Math.max(0, info.size - suffixLength);
+        end = info.size - 1;
+      } else {
+        start = range[1] ? Number(range[1]) : 0;
+        end = range[2] ? Number(range[2]) : end;
+      }
       if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end >= info.size) {
         return new NextResponse(null, { status: 416, headers: { "Content-Range": `bytes */${info.size}` } });
       }
