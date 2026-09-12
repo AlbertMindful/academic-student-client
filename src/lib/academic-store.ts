@@ -328,7 +328,7 @@ function failedKinds(payload: AcademicSyncPayload): Set<AcademicEvent["kind"]> {
 
 function stateContinuityKey(event: AcademicEvent): string | null {
   if (
-    (event.kind !== "assignment" && event.kind !== "exam") ||
+    event.kind === "class" ||
     !event.sources.some((source) => source.provider === "chaoxing")
   ) return null;
   const normalize = (value: string | undefined) => (value ?? "")
@@ -363,11 +363,13 @@ export function reconcileSync(
     if (key) previousByContinuity.set(key, [...(previousByContinuity.get(key) ?? []), event]);
   }
   const stateMigrations = new Map<string, string>();
+  const matchedIncomingIds = new Set<string>();
   const changedIds = new Set<string>();
   const events = incoming.events.map((event) => {
     const continuityMatches = previousByContinuity.get(stateContinuityKey(event) ?? "") ?? [];
     const old = previousById.get(event.id) ?? (continuityMatches.length === 1 ? continuityMatches[0] : undefined);
     if (!old) return event;
+    matchedIncomingIds.add(event.id);
     if (old.id !== event.id) stateMigrations.set(old.id, event.id);
     const changed = meaningfulSignature(old) !== meaningfulSignature(event);
     if (changed) changedIds.add(event.id);
@@ -415,9 +417,16 @@ export function reconcileSync(
   const pendingStateIds = new Set(previous?.pendingStateIds ?? []);
   for (const [oldId, newId] of stateMigrations) {
     const oldState = states[oldId];
-    if (!oldState || states[newId]) continue;
-    states[newId] = oldState;
-    if (oldState.done || oldState.ignored || oldState.pinned || pendingStateIds.has(oldId)) {
+    if (!oldState) continue;
+    const newState = states[newId];
+    const oldHasDurableAction = oldState.done || oldState.ignored || oldState.pinned;
+    const newHasDurableAction = Boolean(newState?.done || newState?.ignored || newState?.pinned);
+    // A neutral state may have been generated automatically when this changing
+    // upstream id first appeared. It must never erase a user's durable action.
+    if (!newState || (oldHasDurableAction && !newHasDurableAction)) {
+      states[newId] = oldState;
+    }
+    if (oldHasDurableAction || pendingStateIds.has(oldId)) {
       pendingStateIds.add(newId);
     }
   }
@@ -438,7 +447,7 @@ export function reconcileSync(
     const quietBefore = Date.parse(incoming.syncedAt) - 3 * 86_400_000;
     for (const event of events) {
       if (
-        !previousById.has(event.id) &&
+        !matchedIncomingIds.has(event.id) &&
         event.publishedAt &&
         Date.parse(event.publishedAt) < quietBefore
       ) {
