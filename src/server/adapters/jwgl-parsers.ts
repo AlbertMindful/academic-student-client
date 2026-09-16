@@ -173,6 +173,27 @@ interface ScheduleSeed {
   endTime: string;
 }
 
+function scheduleStructureSummary($: cheerio.CheerioAPI) {
+  return $("table").toArray().slice(0, 8).map((tableElement) => {
+    const table = $(tableElement);
+    const rows = table.find("tr").toArray().slice(0, 12).map((row) => {
+      const cells = $(row).children("td, th").toArray();
+      return {
+        cells: cells.length,
+        first: clean($(cells[0]).text()).slice(0, 48),
+        classes: Array.from(new Set(cells.flatMap((cell) => clean($(cell).attr("class")).split(" ").filter(Boolean)))).slice(0, 12),
+      };
+    });
+    return {
+      id: clean(table.attr("id")),
+      className: clean(table.attr("class")),
+      rows,
+      blockClasses: Array.from(new Set(table.find("div").toArray().flatMap((node) => clean($(node).attr("class")).split(" ").filter(Boolean)))).slice(0, 20),
+      titled: Array.from(new Set(table.find("[title]").toArray().map((node) => clean($(node).attr("title"))).filter(Boolean))).slice(0, 20),
+    };
+  });
+}
+
 export function parseScheduleHtml(
   html: string,
   semesterId: string,
@@ -268,6 +289,12 @@ export function parseScheduleHtml(
   }
 
   if (!seeds.length && !/暂无(?:课程|课表)|没有(?:课程|课表)|无课表/.test(clean($("body").text()))) {
+    // Structural metadata only: never log course names, teachers, locations,
+    // cookies or the original response body.
+    console.warn("[academic-schedule] parse miss", JSON.stringify({
+      semesterId,
+      tables: scheduleStructureSummary($),
+    }));
     throw new AcademicError("DATA_PARSE_ERROR", "课表页面结构已变化，请刷新后重试。");
   }
   return aggregateSchedule(seeds, semesterId);
