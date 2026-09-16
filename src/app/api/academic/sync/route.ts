@@ -19,7 +19,17 @@ export const dynamic = "force-dynamic";
 interface SourceResult<T> { data: T; error?: string }
 
 function eventSignature(event: AcademicEvent): string {
-  return JSON.stringify({ ...event, firstSeenAt: undefined, updatedAt: undefined, priority: undefined });
+  return JSON.stringify({
+    ...event,
+    firstSeenAt: undefined,
+    updatedAt: undefined,
+    priority: undefined,
+    sources: event.sources.map((source) => {
+      const comparableSource = { ...source };
+      delete comparableSource.raw;
+      return comparableSource;
+    }),
+  });
 }
 
 function mergeWithServerSnapshot(current: AcademicSyncPayload, previous: AcademicSyncPayload | null): AcademicSyncPayload {

@@ -16,6 +16,78 @@ export interface AppUserRecord {
 }
 
 const databaseGlobal = globalThis as DatabaseGlobal;
+const MAX_STATE_ROWS = 2_000;
+const MAX_STORED_JSON_LENGTH = 5 * 1024 * 1024;
+const MAX_SNAPSHOT_BYTES = 5 * 1024 * 1024;
+const MAX_SNAPSHOT_EVENTS = 5_000;
+
+function record(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function storedJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  if (value.length > MAX_STORED_JSON_LENGTH) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function validIsoDate(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 40 || !Number.isFinite(Date.parse(value))) return null;
+  return new Date(value).toISOString();
+}
+
+function storedEventState(value: unknown, databaseDate: unknown): AcademicEventState | null {
+  const state = record(storedJson(value));
+  if (!state) return null;
+  const storedDate = databaseDate instanceof Date
+    ? (Number.isFinite(databaseDate.getTime()) ? databaseDate.toISOString() : null)
+    : databaseDate;
+  const updatedAt = validIsoDate(state.updatedAt) ?? validIsoDate(
+    storedDate,
+  );
+  if (!updatedAt) return null;
+  return {
+    read: state.read === true,
+    done: state.done === true,
+    ignored: state.ignored === true,
+    pinned: state.pinned === true,
+    updatedAt,
+  };
+}
+
+function storedAcademicSnapshot(value: unknown): AcademicSyncPayload | null {
+  const payload = record(storedJson(value));
+  if (!payload || !Array.isArray(payload.events) || !Array.isArray(payload.providers)) return null;
+  if (!validIsoDate(payload.syncedAt) || payload.events.length > MAX_SNAPSHOT_EVENTS) return null;
+  const eventsAreUsable = payload.events.every((value) => {
+    const event = record(value);
+    return Boolean(event && typeof event.id === "string" && Array.isArray(event.sources) && event.sources.every((sourceValue) => {
+      const source = record(sourceValue);
+      return Boolean(source && typeof source.provider === "string" && typeof source.sourceId === "string");
+    }));
+  });
+  if (!eventsAreUsable) return null;
+  return payload as unknown as AcademicSyncPayload;
+}
+
+function compactAcademicSnapshot(payload: AcademicSyncPayload): AcademicSyncPayload {
+  return {
+    ...payload,
+    events: payload.events.slice(0, MAX_SNAPSHOT_EVENTS).map((event) => ({
+      ...event,
+      sources: event.sources.map((source) => {
+        const compactSource = { ...source };
+        delete compactSource.raw;
+        return compactSource;
+      }),
+    })),
+  };
+}
 
 function client(): ReturnType<typeof postgres> | null {
   const url = process.env.DATABASE_URL?.trim();
@@ -104,15 +176,17 @@ export async function readEventStates(ownerKey: string): Promise<Record<string, 
   const sql = client();
   if (!sql) return {};
   await ready(sql);
-  const rows = await sql<Array<{ event_id: string; state: AcademicEventState; updated_at: Date }>>`
+  const rows = await sql<Array<{ event_id: string; state: unknown; updated_at: Date | string }>>`
     SELECT event_id, state, updated_at
     FROM academic_event_states
     WHERE owner_key = ${ownerKey}
+    ORDER BY updated_at DESC
+    LIMIT ${MAX_STATE_ROWS}
   `;
-  return Object.fromEntries(rows.map((row) => [row.event_id, {
-    ...row.state,
-    updatedAt: new Date(row.updated_at).toISOString(),
-  }]));
+  return Object.fromEntries(rows.flatMap((row) => {
+    const state = storedEventState(row.state, row.updated_at);
+    return state ? [[row.event_id, state] as const] : [];
+  }));
 }
 
 export async function writeEventStates(
@@ -158,14 +232,15 @@ export async function readAcademicSnapshot(ownerKeys: string[]): Promise<Academi
   const sql = client();
   if (!sql || !ownerKeys.length) return null;
   await ready(sql);
-  const rows = await sql<Array<{ payload: AcademicSyncPayload }>>`
+  const rows = await sql<Array<{ payload: unknown }>>`
     SELECT payload
     FROM academic_event_snapshots
     WHERE owner_key IN ${sql(ownerKeys)}
+      AND pg_column_size(payload) <= ${MAX_SNAPSHOT_BYTES}
     ORDER BY synced_at DESC, updated_at DESC
     LIMIT 1
   `;
-  return rows[0]?.payload ?? null;
+  return storedAcademicSnapshot(rows[0]?.payload);
 }
 
 export async function writeAcademicSnapshot(
@@ -175,9 +250,12 @@ export async function writeAcademicSnapshot(
   const sql = client();
   if (!sql || !ownerKeys.length) return;
   await ready(sql);
+  const storedPayload = compactAcademicSnapshot(payload);
+  const serializedPayload = JSON.stringify(storedPayload);
+  if (Buffer.byteLength(serializedPayload, "utf8") > MAX_SNAPSHOT_BYTES) return;
   await sql.begin((transaction) => ownerKeys.map((ownerKey) => transaction`
     INSERT INTO academic_event_snapshots (owner_key, payload, synced_at, updated_at)
-    VALUES (${ownerKey}, ${JSON.stringify(payload)}::jsonb, ${payload.syncedAt}::timestamptz, CURRENT_TIMESTAMP)
+    VALUES (${ownerKey}, ${serializedPayload}::jsonb, ${storedPayload.syncedAt}::timestamptz, CURRENT_TIMESTAMP)
     ON CONFLICT (owner_key) DO UPDATE
     SET payload = EXCLUDED.payload,
         synced_at = EXCLUDED.synced_at,
