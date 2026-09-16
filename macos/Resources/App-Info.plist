@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>AcademicCenterBaseURL</key>
+    <string>http://127.0.0.1:3000</string>
     <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
     <key>CFBundleDisplayName</key><string>学业中心</string>
     <key>CFBundleExecutable</key><string>AcademicCenter</string>

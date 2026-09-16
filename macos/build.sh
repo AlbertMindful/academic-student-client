@@ -16,6 +16,8 @@ trap cleanup EXIT
 
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources" "$DIST_DIR"
 cp "$SCRIPT_DIR/Resources/App-Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+APP_BASE_URL="${ACADEMIC_APP_BASE_URL:-http://127.0.0.1:3000}"
+/usr/libexec/PlistBuddy -c "Set :AcademicCenterBaseURL $APP_BASE_URL" "$APP_BUNDLE/Contents/Info.plist"
 
 env TMPDIR=/tmp sips -s format icns "$PROJECT_DIR/public/icons/app-icon-512.png" --out "$APP_BUNDLE/Contents/Resources/AppIcon.icns" >/dev/null
 

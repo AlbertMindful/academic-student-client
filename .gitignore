@@ -38,3 +38,8 @@ macos/dist/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local Codex/image-analysis artifacts
+/.codex-pet-repairs/
+/.codex-pet-runs/
+/androguard.db

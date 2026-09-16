@@ -3,7 +3,10 @@ import Foundation
 
 @MainActor
 final class AppRouter: ObservableObject {
-    static let baseURL = URL(string: "https://example.invalid")!
+    static let baseURL: URL = {
+        let configured = Bundle.main.object(forInfoDictionaryKey: "AcademicCenterBaseURL") as? String
+        return URL(string: configured ?? "http://127.0.0.1:3000")!
+    }()
 
     @Published private(set) var request = URLRequest(url: baseURL.appendingPathComponent("dashboard"))
 
