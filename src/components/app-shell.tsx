@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
-import { clearProviderCache } from "@/lib/academic-store";
 import { useSession } from "@/hooks/use-session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PwaInstallButton } from "@/components/pwa-install-button";
@@ -120,12 +119,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      await api.logout();
-      await clearProviderCache("academic");
+      await api.logoutAccount();
     } finally {
-      window.location.replace("/dashboard");
+      window.location.replace("/login");
     }
   }
+
+  React.useEffect(() => {
+    if (state === "unauthenticated") window.location.replace("/login");
+  }, [state]);
 
   if (state === "loading") {
     return (
@@ -145,6 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (state === "unauthenticated") return null;
   const name = profile?.name ?? "我的学业";
   const initials = name.slice(0, 1) || "学";
 
@@ -227,22 +230,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     数据与同步
                   </Link>
                 </DropdownMenuItem>
-                {state === "authenticated" ? (
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      void handleLogout();
-                    }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    断开教务系统
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem asChild>
-                    <Link href="/login"><LogIn className="h-4 w-4" />连接教务系统</Link>
-                  </DropdownMenuItem>
-                )}
+                {!profile && <DropdownMenuItem asChild><Link href="/connect/academic"><LogIn className="h-4 w-4" />连接教务系统</Link></DropdownMenuItem>}
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void handleLogout(); }} className="text-destructive focus:text-destructive"><LogOut className="h-4 w-4" />退出系统账户</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

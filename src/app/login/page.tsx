@@ -1,6 +1,4 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { LoginForm } from "@/components/login-form";
+import { AccountLoginForm } from "@/components/account-login-form";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppMark } from "@/components/app-mark";
 
@@ -18,10 +16,6 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
 
-      <Link href="/dashboard" className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" />返回学业中心
-      </Link>
-
       <div className="w-full max-w-sm page-enter">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <AppMark className="h-12 w-12 shadow-[0_12px_30px_hsl(var(--primary)/.28)]" />
@@ -34,7 +28,7 @@ export default function LoginPage() {
         </div>
 
         <div className="surface rounded-[1.35rem] p-6">
-          <LoginForm />
+          <AccountLoginForm />
         </div>
       </div>
     </div>

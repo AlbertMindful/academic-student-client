@@ -54,6 +54,34 @@ function ownerDirectory(ownerKey: string): string {
   return path.join(driveConfig.root, ownerKey);
 }
 
+/** Move files created under the former academic-login identity to the app user. */
+export async function migrateDriveOwners(sourceKeys: string[], targetKey: string): Promise<void> {
+  const targetDirectory = ownerDirectory(targetKey);
+  await mkdir(targetDirectory, { recursive: true, mode: 0o750 });
+  for (const sourceKey of new Set(sourceKeys)) {
+    if (sourceKey === targetKey) continue;
+    const sourceDirectory = ownerDirectory(sourceKey);
+    const entries = await readdir(sourceDirectory, { withFileTypes: true }).catch((cause: NodeJS.ErrnoException) => {
+      if (cause.code === "ENOENT") return [];
+      throw cause;
+    });
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.isSymbolicLink()) continue;
+      const source = path.join(sourceDirectory, entry.name);
+      let destination = path.join(targetDirectory, entry.name);
+      try {
+        await stat(destination);
+        const extension = path.extname(entry.name);
+        const stem = path.basename(entry.name, extension);
+        destination = path.join(targetDirectory, `${stem}（迁移）${extension}`);
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+      }
+      await rename(source, destination);
+    }
+  }
+}
+
 async function directorySize(directory: string): Promise<number> {
   const entries = await readdir(directory, { withFileTypes: true }).catch((cause: NodeJS.ErrnoException) => {
     if (cause.code === "ENOENT") return [];

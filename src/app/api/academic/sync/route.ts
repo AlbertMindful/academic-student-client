@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { CourseSchedule, Exam, Grade, ProviderHealth, Semester, StudentProfile } from "@/lib/types";
+import type { AcademicEvent, AcademicSyncPayload, CourseSchedule, Exam, Grade, ProviderHealth, Semester, StudentProfile } from "@/lib/types";
 import { deduplicateAcademicEvents, examsToEvents, gradesToEvents, scheduleToEvents } from "@/lib/academic-events";
 import { computeTeachingWeek } from "@/lib/teaching-week";
 import { readSessionId, sessionCookieOptions } from "@/server/api-helpers";
@@ -11,10 +11,45 @@ import { serverConfig } from "@/server/config";
 import { chaoxingConnectionFromToken } from "@/server/chaoxing/connection";
 import { readChaoxingSessionToken, writeChaoxingSessionToken } from "@/server/chaoxing/session-cookie";
 import { ChaoxingReauthError, getChaoxingAcademicData } from "@/server/chaoxing/provider";
+import { currentAppUser } from "@/server/app-auth";
+import { databaseErrorDetails, databaseOwnerKey, readAcademicSnapshot, writeAcademicSnapshot } from "@/server/database";
 
 export const dynamic = "force-dynamic";
 
 interface SourceResult<T> { data: T; error?: string }
+
+function eventSignature(event: AcademicEvent): string {
+  return JSON.stringify({ ...event, firstSeenAt: undefined, updatedAt: undefined, priority: undefined });
+}
+
+function mergeWithServerSnapshot(current: AcademicSyncPayload, previous: AcademicSyncPayload | null): AcademicSyncPayload {
+  if (!previous) return current;
+  const oldById = new Map(previous.events.map((event) => [event.id, event]));
+  const events = current.events.map((event) => {
+    const old = oldById.get(event.id);
+    if (!old) return event;
+    return {
+      ...event,
+      firstSeenAt: old.firstSeenAt,
+      updatedAt: eventSignature(old) === eventSignature(event) ? old.updatedAt : current.syncedAt,
+    };
+  });
+  const unavailable = new Set(current.providers.filter((provider) => provider.status !== "ok").map((provider) => provider.provider));
+  for (const old of previous.events) {
+    if (!events.some((event) => event.id === old.id) && old.sources.some((source) => unavailable.has(source.provider))) {
+      events.push(old);
+    }
+  }
+  return {
+    ...current,
+    profile: current.profile ?? previous.profile,
+    currentSemester: current.currentSemester ?? previous.currentSemester,
+    teachingWeek: current.teachingWeek ?? previous.teachingWeek,
+    officialCourseNames: current.officialCourseNames?.length ? current.officialCourseNames : previous.officialCourseNames,
+    events,
+    diagnostics: { ...current.diagnostics, counts: { ...current.diagnostics.counts, events: events.length } },
+  };
+}
 
 async function isolate<T>(fallback: T, operation: () => Promise<T>): Promise<SourceResult<T>> {
   try {
@@ -30,6 +65,8 @@ async function synchronize(
   cachedOfficialCourseNames: string[] = [],
   cachedKnownAcademicCourseNames: string[] = [],
 ) {
+  const appUser = await currentAppUser(req);
+  if (!appUser) return NextResponse.json({ error: { code: "APP_AUTH_REQUIRED", message: "请先登录系统账户。" } }, { status: 401 });
   const syncedAt = new Date().toISOString();
   const warnings: string[] = [];
   let profile: StudentProfile | undefined;
@@ -154,7 +191,7 @@ async function synchronize(
     ...chaoxingEvents,
   ]);
 
-  const response = NextResponse.json({
+  let payload: AcademicSyncPayload = {
     profile,
     currentSemester,
     teachingWeek: currentSemester?.startDate
@@ -176,7 +213,15 @@ async function synchronize(
       },
       warnings,
     },
-  });
+  };
+  try {
+    const ownerKey = databaseOwnerKey(`app-user:${appUser.id}`);
+    payload = mergeWithServerSnapshot(payload, await readAcademicSnapshot([ownerKey]));
+    await writeAcademicSnapshot([ownerKey], payload);
+  } catch (cause) {
+    console.error("[academic-sync] snapshot unavailable", databaseErrorDetails(cause));
+  }
+  const response = NextResponse.json(payload);
   if (renewedAcademicToken) {
     response.cookies.set(serverConfig.sessionCookieName, renewedAcademicToken, sessionCookieOptions());
   }

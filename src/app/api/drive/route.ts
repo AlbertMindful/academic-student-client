@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/server/auth/academicAuth";
-import { credentialCookieName, openCredentials } from "@/server/auth/credential-token";
-import { readSessionId } from "@/server/api-helpers";
+import { currentAppUser } from "@/server/app-auth";
 import { databaseOwnerKey } from "@/server/database";
 import { DriveError, driveConfig, listDrive, removeDriveFile, storeDriveFile } from "@/server/drive";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function ownerKey(req: NextRequest): string | null {
-  const account = getSession(readSessionId(req))?.profile?.studentId
-    ?? openCredentials(req.cookies.get(credentialCookieName)?.value)?.username;
-  return account ? databaseOwnerKey(account) : null;
+async function ownerKey(req: NextRequest): Promise<string | null> {
+  const user = await currentAppUser(req);
+  return user ? databaseOwnerKey(`app-user:${user.id}`) : null;
 }
 
 function errorResponse(cause: unknown) {
@@ -27,7 +24,7 @@ function unauthorized() {
 }
 
 export async function GET(req: NextRequest) {
-  const owner = ownerKey(req);
+  const owner = await ownerKey(req);
   if (!owner) return unauthorized();
   try {
     return NextResponse.json(await listDrive(owner));
@@ -37,7 +34,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const owner = ownerKey(req);
+  const owner = await ownerKey(req);
   if (!owner) return unauthorized();
   if (!req.body) return NextResponse.json({ error: { code: "EMPTY_FILE", message: "请选择要上传的文件。" } }, { status: 400 });
   const encodedName = req.headers.get("x-file-name");
@@ -63,7 +60,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const owner = ownerKey(req);
+  const owner = await ownerKey(req);
   if (!owner) return unauthorized();
   const name = req.nextUrl.searchParams.get("name");
   if (!name) return NextResponse.json({ error: { code: "INVALID_FILE_NAME", message: "缺少文件名。" } }, { status: 400 });

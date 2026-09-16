@@ -81,6 +81,18 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 20_000):
 }
 
 export const api = {
+  getAccountStatus(): Promise<{ setupComplete: boolean; authenticated: boolean; username?: string }> {
+    return request("/api/account/status");
+  },
+  setupAccount(username: string, password: string): Promise<{ ok: boolean; username: string }> {
+    return request("/api/account/setup", { method: "POST", body: JSON.stringify({ username, password }) });
+  },
+  loginAccount(username: string, password: string): Promise<{ ok: boolean; username: string }> {
+    return request("/api/account/login", { method: "POST", body: JSON.stringify({ username, password }) });
+  },
+  logoutAccount(): Promise<{ ok: boolean }> {
+    return request("/api/account/logout", { method: "POST" });
+  },
   login(username: string, password: string): Promise<{ ok: boolean }> {
     return request("/api/auth/login", {
       method: "POST",

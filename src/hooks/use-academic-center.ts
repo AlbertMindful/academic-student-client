@@ -58,7 +58,20 @@ export function useAcademicCenter() {
             states: mergeEventStates(base.states, remote.states, new Set(base.pendingStateIds ?? [])),
           };
         }
-        const next = reconcileSync(payload, base);
+        let next = reconcileSync(payload, base);
+        // A brand-new browser has no local cache, but it must still receive the
+        // cloud state. The old ordering only merged remote data when `base`
+        // already existed, which made first-time devices show completed items.
+        if (remote) {
+          next = {
+            ...next,
+            states: mergeEventStates(
+              next.states,
+              remote.states,
+              new Set(next.pendingStateIds ?? []),
+            ),
+          };
+        }
         cacheRef.current = next;
         void saveAcademicCache(next);
         return next;

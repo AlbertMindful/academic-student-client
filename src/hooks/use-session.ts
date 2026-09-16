@@ -14,12 +14,11 @@ export function useSession() {
 
   React.useEffect(() => {
     let cancelled = false;
-    api
-      .getSession()
-      .then((s) => {
+    Promise.all([api.getAccountStatus(), api.getSession().catch(() => null)])
+      .then(([account, academic]) => {
         if (cancelled) return;
-        if (s.authenticated) {
-          setProfile(s.profile);
+        if (account.authenticated) {
+          setProfile(academic?.profile);
           setState("authenticated");
         } else {
           setState("unauthenticated");

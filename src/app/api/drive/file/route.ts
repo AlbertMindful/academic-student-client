@@ -2,9 +2,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/server/auth/academicAuth";
-import { credentialCookieName, openCredentials } from "@/server/auth/credential-token";
-import { readSessionId } from "@/server/api-helpers";
+import { currentAppUser } from "@/server/app-auth";
 import { databaseOwnerKey } from "@/server/database";
 import { DriveError, driveFilePath } from "@/server/drive";
 
@@ -19,14 +17,13 @@ const MIME_TYPES: Record<string, string> = {
   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
-function ownerKey(req: NextRequest): string | null {
-  const account = getSession(readSessionId(req))?.profile?.studentId
-    ?? openCredentials(req.cookies.get(credentialCookieName)?.value)?.username;
-  return account ? databaseOwnerKey(account) : null;
+async function ownerKey(req: NextRequest): Promise<string | null> {
+  const user = await currentAppUser(req);
+  return user ? databaseOwnerKey(`app-user:${user.id}`) : null;
 }
 
 export async function GET(req: NextRequest) {
-  const owner = ownerKey(req);
+  const owner = await ownerKey(req);
   if (!owner) return NextResponse.json({ error: { code: "NOT_CONNECTED", message: "请先连接教务系统。" } }, { status: 401 });
   const name = req.nextUrl.searchParams.get("name");
   if (!name) return NextResponse.json({ error: { code: "INVALID_FILE_NAME", message: "缺少文件名。" } }, { status: 400 });
