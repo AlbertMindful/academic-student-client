@@ -133,11 +133,21 @@ export function parseProfileHtml(html: string): Partial<StudentProfile> {
 
 /** 从学生主页/主框架提取当前学年学期 id。 */
 export function extractCurrentSemesterId(html: string): string | null {
+  const $ = cheerio.load(html);
+  const selected = $(
+    "select[name*='xnxq'] option[selected], select[id*='xnxq'] option[selected]",
+  ).first().attr("value");
+  if (selected) {
+    const parsed = parseSemesterId(selected);
+    if (/^\d{4}-\d{4}-\d$/.test(parsed)) return parsed;
+  }
+
   const patterns = [
-    /xnxq01id\s*=\s*["']([0-9]{4}-[0-9]{4}-[0-9])["']/,
-    /xnxqdm\s*=\s*["']([0-9]{4}-[0-9]{4}-[0-9])["']/,
     /value=["']([0-9]{4}-[0-9]{4}-[0-9])["']\s*selected/,
     /"xnxq01id"\s*:\s*"([0-9]{4}-[0-9]{4}-[0-9])"/,
+    /(?:current|dq|default)[A-Za-z_]*(?:xnxq|semester)[A-Za-z_]*\s*[:=]\s*["']([0-9]{4}-[0-9]{4}-[0-9])["']/i,
+    /xnxq01id\s*=\s*["']([0-9]{4}-[0-9]{4}-[0-9])["']/,
+    /xnxqdm\s*=\s*["']([0-9]{4}-[0-9]{4}-[0-9])["']/,
     /([0-9]{4}-[0-9]{4}-[0-9])\s*学年/,
   ];
   for (const p of patterns) {
@@ -168,64 +178,98 @@ export function parseScheduleHtml(
   semesterId: string,
 ): CourseSchedule[] {
   const $ = cheerio.load(html);
-  const table = $("table").first();
-  if (!table.length) {
+  const tables = $("table").toArray().sort((a, b) => {
+    const score = (table: typeof a) => {
+      const node = $(table);
+      const blocks = node.find("div.kbcontent, div[class*='kbcontent']").length;
+      const weekdays = (node.text().match(/星期[一二三四五六日]|周[一二三四五六日]/g) ?? []).length;
+      return blocks * 100 + weekdays;
+    };
+    return score(b) - score(a);
+  });
+  if (!tables.length) {
     throw new AcademicError("DATA_PARSE_ERROR", "未找到课表数据。");
   }
 
   const seeds: ScheduleSeed[] = [];
 
-  for (const tr of table.find("tr").toArray()) {
-    const tds = $(tr).find("td, th").toArray();
-    if (tds.length < 8) continue;
+  for (const tableElement of tables) {
+    const table = $(tableElement);
+    if (!/星期[一二三四五六日]|周[一二三四五六日]/.test(clean(table.text()))
+      && !table.find("div.kbcontent, div[class*='kbcontent']").length) continue;
 
-    const firstText = clean($(tds[0]).text());
-    const secMatch = firstText.match(/(\d+(?:,\d+)*)\s*节/);
-    if (!secMatch) continue; // 表头行（星期一…星期日）
+    for (const tr of table.find("tr").toArray()) {
+      // Only direct cells belong to this row. `find()` also included cells from
+      // nested layout tables and shifted every weekday column.
+      const tds = $(tr).children("td, th").toArray();
+      if (tds.length < 2) continue;
 
-    const nums = secMatch[1].split(",").map(Number);
-    const startSection = Math.min(...nums);
-    const endSection = Math.max(...nums);
-    const timeMatch = firstText.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
-    const startTime = timeMatch?.[1] ?? periodStart(startSection);
-    const endTime = timeMatch?.[2] ?? periodEnd(endSection);
+      const sectionIndex = tds.findIndex((cell) => /(?:第\s*)?\d+(?:\s*[-,，、]\s*\d+)*\s*节/.test(clean($(cell).text())));
+      if (sectionIndex < 0) continue; // 表头行（星期一…星期日）
+      const firstText = clean($(tds[sectionIndex]).text());
+      const sectionLabel = firstText.match(/(?:第\s*)?(\d+(?:\s*[-,，、]\s*\d+)*)\s*节/)?.[1] ?? "";
+      const nums = (sectionLabel.match(/\d+/g) ?? []).map(Number);
+      if (!nums.length) continue;
 
-    for (let col = 1; col <= 7; col++) {
-      const dayOfWeek = col;
-      const cell = $(tds[col]);
-      cell.find("div.kbcontent").each((_, el) => {
-        const div = $(el);
-        const teacher = clean(div.find("font[title='老师']").text());
-        const weeksSections = clean(
-          div.find("font[title='周次(节次)']").text(),
-        );
-        const location = clean(div.find("font[title='教室']").text());
+      const startSection = Math.min(...nums);
+      const endSection = Math.max(...nums);
+      const timeMatch = firstText.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+      const startTime = timeMatch?.[1] ?? periodStart(startSection);
+      const endTime = timeMatch?.[2] ?? periodEnd(endSection);
 
-        // 课程名 = 第一个文本节点（<br> 之前）
-        let courseName = "";
-        div.contents().each((_, node) => {
-          if (!courseName && node.type === "text") {
-            courseName = clean((node as unknown as { data?: string }).data ?? "");
+      for (let dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
+        const cell = $(tds[sectionIndex + dayOfWeek]);
+        if (!cell.length) continue;
+        let blocks = cell.find("div.kbcontent, div[class*='kbcontent']").toArray();
+        blocks = blocks.filter((block) => !$(block).parents("div.kbcontent, div[class*='kbcontent']").length);
+        if (!blocks.length && cell.find("[title*='周次'], [title='老师'], [title='教师']").length) {
+          const cellElement = cell.get(0);
+          if (cellElement) blocks = [cellElement];
+        }
+
+        for (const el of blocks) {
+          const div = $(el);
+          const titledText = (pattern: RegExp) => clean(div.find("[title]").filter((_, node) => pattern.test($(node).attr("title") ?? "")).first().text());
+          const teacher = titledText(/老师|教师|主讲/);
+          const weeksSections = titledText(/周次|节次/);
+          const location = titledText(/教室|地点/);
+
+          // Course names may now be wrapped in an anchor/span. Read everything
+          // before the first line break, while excluding titled metadata.
+          const nameParts: string[] = [];
+          for (const node of div.contents().toArray()) {
+            if (node.type === "tag" && node.name === "br") break;
+            const item = $(node);
+            if (node.type === "tag" && item.attr("title")) continue;
+            const value = node.type === "text"
+              ? clean((node as unknown as { data?: string }).data)
+              : clean(item.text());
+            if (value) nameParts.push(value);
           }
-        });
-        if (!courseName) return;
+          const courseName = clean(nameParts.join(" "))
+            || titledText(/课程(?:名称)?|科目/);
+          if (!courseName) continue;
 
-        const weeksText = weeksSections.replace(/\[.*?\]/g, "").trim();
-        seeds.push({
-          courseName,
-          teacher,
-          location,
-          weeksText: weeksText || "1-16周",
-          dayOfWeek,
-          startSection,
-          endSection,
-          startTime,
-          endTime,
-        });
-      });
+          const weeksText = weeksSections.replace(/\[.*?\]/g, "").trim();
+          seeds.push({
+            courseName,
+            teacher,
+            location,
+            weeksText: weeksText || "1-16周",
+            dayOfWeek,
+            startSection,
+            endSection,
+            startTime,
+            endTime,
+          });
+        }
+      }
     }
   }
 
+  if (!seeds.length && !/暂无(?:课程|课表)|没有(?:课程|课表)|无课表/.test(clean($("body").text()))) {
+    throw new AcademicError("DATA_PARSE_ERROR", "课表页面结构已变化，请刷新后重试。");
+  }
   return aggregateSchedule(seeds, semesterId);
 }
 
